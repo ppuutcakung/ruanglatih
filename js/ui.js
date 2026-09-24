@@ -223,9 +223,16 @@ const UI = {
       '<div class="full err" hidden data-err></div><button type="submit" hidden></button></form>';
     const m = UI.modal({
       title: o.title, wide: o.wide, body: body,
-      foot: '<button class="btn outline" data-tutup>Batal</button><button class="btn primary" data-kirim>' + esc(o.submit || 'Simpan') + '</button>'
+      foot: '<button class="btn outline" data-tutup>Batal</button>' + (o.tombol || []).map((t, i) => '<button class="btn ' + (t.kelas || 'secondary') + '" data-lain="' + i + '">' + (t.ikon ? UI.ic(t.ikon, 'sm') : '') + esc(t.teks) + '</button>').join('') +
+        '<button class="btn primary" data-kirim>' + esc(o.submit || 'Simpan') + '</button>'
     });
     const form = $('form', m.el), err = $('[data-err]', m.el), btn = $('[data-kirim]', m.el);
+    // Tombol tambahan (mis. "Simpan Draft"): fn(values, modal) → return false agar modal tetap terbuka
+    $$('[data-lain]', m.el).forEach(tb => tb.onclick = async () => {
+      err.hidden = true;
+      try { await UI.sibuk(tb, async () => { const r = await o.tombol[+tb.dataset.lain].fn(nilai(), m); if (r !== false) m.close(); }); }
+      catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    });
     $$('[data-seg]', form).forEach(sg => sg.addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
       $$('button', sg).forEach(x => x.classList.toggle('on', x === b));

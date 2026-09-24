@@ -23,7 +23,7 @@ const Sesi = {
 const BACA = {
   pelatihan_list: 'pel reg', pelatihan_detail: 'pel reg absen tes tugas eval umkm sert', materi_list: 'materi', soal_list: 'soal tes',
   tugas_list: 'tugas umkm', nilai_rekap: 'pel reg absen tes tugas umkm', dasbor_instruktur: 'pel reg absen tes tugas soal materi',
-  dasbor_admin: '*', umkm_list: 'umkm reg', instruktur_list: 'ins pel', eval_form: 'eval', eval_hasil: 'eval reg pel', pengaturan_get: 'set',
+  dasbor_admin: '*', draft_list: 'draft', umkm_list: 'umkm reg', instruktur_list: 'ins pel', eval_form: 'eval', eval_hasil: 'eval reg pel', pengaturan_get: 'set',
   admin_list: 'admin', log_list: '*', sert_status: 'sert reg absen tes tugas pel umkm', laporan_data: '*',
   p_beranda: 'pel reg', p_pelatihan: 'pel reg absen tes', p_ruang: 'pel absen tes tugas eval materi soal', p_materi: 'materi reg',
   p_riwayat: '*', p_sertifikat: '*'
@@ -31,7 +31,7 @@ const BACA = {
 const TULIS = {
   materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
   umkm_simpan: 'umkm', umkm_reset_pin: 'umkm', umkm_status: 'umkm', umkm_import: 'umkm', instruktur_simpan: 'ins',
-  pelatihan_simpan: 'pel', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
+  pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
   admin_simpan: 'admin', admin_hapus: 'admin', sert_template: 'sert', sert_terbitkan: 'sert',
   p_absen: 'absen', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'
@@ -179,7 +179,7 @@ const API = {
         const id = this.pelUtama();
         if (id) await this.multi([{ action: 'soal_list', data: { id_pelatihan: id } }, { action: 'nilai_rekap', data: { id_pelatihan: id } }, { action: 'materi_list', data: { id_pelatihan: id } }, { action: 'tugas_list', data: { id_pelatihan: id } }]);
       } else {
-        await this.multi([{ action: 'dasbor_admin' }, { action: 'pelatihan_list' }, { action: 'instruktur_list' }, { action: 'umkm_list' }, { action: 'materi_list' }, { action: 'tugas_list' }]);
+        await this.multi([{ action: 'dasbor_admin' }, { action: 'pelatihan_list' }, { action: 'draft_list' }, { action: 'instruktur_list' }, { action: 'umkm_list' }, { action: 'materi_list' }, { action: 'tugas_list' }]);
         const id = this.pelUtama();
         const l = [{ action: 'log_list', data: { limit: 1000 } }, { action: 'admin_list' }, { action: 'pengaturan_get' }, { action: 'laporan_data' }];
         if (id) l.unshift({ action: 'pelatihan_detail', data: { id_pelatihan: id } }, { action: 'soal_list', data: { id_pelatihan: id } }, { action: 'eval_hasil', data: { id_pelatihan: id } }, { action: 'sert_status', data: { id_pelatihan: id } });
