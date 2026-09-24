@@ -37,8 +37,6 @@ var App = {
 
   async keluar() {
     if (!await UI.konfirmasi('Keluar dari RuangLatih di perangkat ini?', { ok: 'Keluar' })) return;
-    Peserta.cache = {};
-    Kelola.segarkanPel();
     sessionStorage.clear();
     this.keMasuk();
     UI.toast('Anda sudah keluar.', 'info');
@@ -146,6 +144,7 @@ var App = {
         location.hash = '#/' + this.awal();
         this.render();
         UI.toast('Selamat datang, ' + UI.sapaan(Sesi.user().nama) + '!');
+        setTimeout(() => API.panaskan(), 400); // ⚡ siapkan data semua menu di latar
       } catch (ex) {
         err.textContent = ex.message; err.hidden = false;
         if (pin) pin.kosongkan();
@@ -194,6 +193,7 @@ var App = {
         }, 'Menyimpan…');
         location.hash = '#/beranda';
         this.render();
+        setTimeout(() => API.panaskan(), 400);
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     };
   },
@@ -307,6 +307,9 @@ var App = {
       return;
     }
     this.render();
+    if (Sesi.user()) setTimeout(() => API.panaskan(), 600); // ⚡ panaskan data menu di latar
+    // Segarkan lagi saat aplikasi dibuka kembali dari latar belakang (HP)
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && Sesi.user()) API.panaskanNanti(); });
     // Periksa ulang sesi di latar belakang (akun dinonaktifkan / token kedaluwarsa)
     if (Sesi.user()) API.call('sesi', {}, { retry: 1 }).then(r => {
       const s = Sesi.get();

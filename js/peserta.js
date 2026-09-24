@@ -24,24 +24,9 @@ const Peserta = {
   user() { return Sesi.user() || {}; },
   panggil(u) { return 'Halo, ' + UI.sapaan(u.nama) + ' 👋'; },
 
-  /** Muat data: tampilkan salinan terakhir dulu (cepat), lalu segarkan dari server. */
-  async ambil(v, action, data, gambar) {
-    const k = action + JSON.stringify(data || {});
-    const lama = this.cache[k];
-    if (lama) gambar(lama.d);
-    try {
-      const d = await API.call(action, data || {}, { onRetry: () => UI.toast('Server sibuk, mencoba lagi…', 'info') });
-      const s = JSON.stringify(d);
-      this.cache[k] = { d: d, s: s };
-      if (!lama || lama.s !== s) { if (v.isConnected || !lama) gambar(d); }
-      return d;
-    } catch (e) {
-      if (!lama) throw e;
-      UI.toast('Menampilkan data terakhir. ' + e.message, 'info');
-      return lama.d;
-    }
-  },
-  lupakan(prefix) { Object.keys(this.cache).forEach(k => { if (!prefix || k.indexOf(prefix) === 0) delete this.cache[k]; }); },
+  /** ⚡ Tampil instan dari cache lokal, lalu disegarkan diam-diam (API.ambil). */
+  ambil(v, action, data, gambar) { return API.ambil(action, data || {}, d => gambar(d), { el: v }); },
+  lupakan() { /* cache dibasikan otomatis setiap aksi tulis */ },
 
   hero(o) {
     const u = this.user();
@@ -71,10 +56,6 @@ const Peserta = {
     $('[data-keluar]', m.el).onclick = () => { m.close(); App.keluar(); };
   },
 
-  pelAktif() {
-    const b = Object.values(this.cache).find(c => c.d && c.d.aktif && c.d.profil);
-    return b && b.d.aktif[0] ? b.d.aktif[0].id_pelatihan : '';
-  },
 
   // ===========================================================
   // BERANDA
@@ -157,27 +138,40 @@ const Peserta = {
       $('.hero .desc', v).textContent = d.pelatihan.judul;
       isi.innerHTML = '<nav class="rtabs" data-tabs>' + tabs.map(t => '<button data-v="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + UI.ic(t[1]) + '<span>' + t[2] + '</span></button>').join('') + '</nav><div class="col" data-tab></div>';
       $('[data-tabs]', isi).onclick = e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.v; history.replaceState(null, '', '#/ruang/' + id + '/' + tab); $$('[data-tabs] button', isi).forEach(x => x.classList.toggle('on', x === b)); isiTab(); };
+      UI.klik($('[data-tab]', isi), aksiTab); // dipasang sekali per render
       isiTab();
     };
-    const muatUlang = async () => { this.lupakan('p_ruang'); this.lupakan('p_beranda'); this.lupakan('p_pelatihan'); try { gambar(await API.call('p_ruang', { id_pelatihan: id })); } catch (e) { UI.gagal(e); } };
+    const muatUlang = async () => { try { const x = await API.call('p_ruang', { id_pelatihan: id }); if (v.isConnected) gambar(x); } catch (e) { UI.gagal(e); } };
     const isiTab = () => {
       const t = $('[data-tab]', isi);
-      t.innerHTML = this['tab_' + tab](d);
-      if (tab === 'absensi') UI.klik(t, {
+      if (t) t.innerHTML = this['tab_' + tab](d);
+    };
+    const aksiTab = {
         absen: async b => {
+          // ⚡ Optimistis: langsung tercatat di layar, dikirim ke server di latar (dengan coba ulang)
+          const s = d.absensi.find(x => x.hari_ke === +b.dataset.h);
+          if (!s || s._kirim) return;
+          const jam = new Date(), w = UI.hariIni() + ' ' + ('0' + jam.getHours()).slice(-2) + ':' + ('0' + jam.getMinutes()).slice(-2) + ':00';
+          Object.assign(s, { hadir: true, waktu: w, _kirim: true });
+          d.status.hadir++;
+          if (tab === 'absensi' && v.isConnected) isiTab();
+          UI.toast('Absensi Hari ' + s.hari_ke + ' tercatat.');
           try {
-            await UI.sibuk(b, async ubah => {
-              const r = await API.call('p_absen', { id_pelatihan: id, hari_ke: +b.dataset.h }, { retry: 6, onRetry: n => ubah('Server sibuk, mencoba lagi (' + n + ')…') });
-              UI.toast(r.message);
-            }, 'Mengirim…');
+            const r = await API.call('p_absen', { id_pelatihan: id, hari_ke: s.hari_ke }, { retry: 8 });
+            Object.assign(s, { waktu: r.waktu, _kirim: false });
+            if (tab === 'absensi' && v.isConnected) isiTab();
             muatUlang();
-          } catch (e) { UI.gagal(e); if (/sudah absen/i.test(e.message)) muatUlang(); }
+          } catch (e) {
+            if (/sudah absen/i.test(e.message)) { s._kirim = false; muatUlang(); return; }
+            Object.assign(s, { hadir: false, waktu: '', _kirim: false });
+            d.status.hadir--;
+            if (v.isConnected) isiTab();
+            UI.gagal('Absensi belum terkirim: ' + e.message);
+          }
         }
-      });
-      if (tab === 'tugas') UI.klik(t, {
+,
         kumpul: b => this.kumpulTugas(d.tugas.daftar.find(x => x.id_tugas === b.dataset.id), muatUlang),
         lihat: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_file', { id_tugas: b.dataset.id }), 'Kiriman tugas Anda')); } catch (e) { UI.gagal(e); } }
-      });
     };
     try { await this.ambil(v, 'p_ruang', { id_pelatihan: id }, gambar); } catch (e) { UI.galat(isi, e, () => this.ruang(v, a)); }
   },
@@ -187,7 +181,7 @@ const Peserta = {
     const slot = d.absensi.map(s => {
       const lewat = s.tanggal < UI.hariIni();
       let kanan, kls = '', aksi = '';
-      if (s.hadir) kanan = '<span class="chip ok">' + UI.ic('checkCircle', 'sm') + 'Hadir</span>';
+      if (s.hadir) kanan = s._kirim ? '<span class="chip warn">' + '<span class="spin" style="width:12px;height:12px"></span>Menyimpan…</span>' : '<span class="chip ok">' + UI.ic('checkCircle', 'sm') + 'Hadir</span>';
       else if (s.buka) { kls = 'aktif'; aksi = '<button class="btn primary block mt12" data-aksi="absen" data-h="' + s.hari_ke + '">' + UI.ic('hand') + 'Kirim Absensi Sekarang</button>'; kanan = ''; }
       else if (lewat) kanan = '<span class="chip bad sm">Tidak hadir</span>';
       else kanan = '<span class="chip line sm">' + UI.ic('lock', 'sm') + 'Belum dibuka</span>';
@@ -388,12 +382,20 @@ const Peserta = {
         return UI.toast(kurang.length + ' pertanyaan belum dijawab.', 'bad');
       }
       if (!await UI.konfirmasi('Kirim evaluasi sekarang? Evaluasi hanya bisa diisi <b>1 kali</b>.', { ok: 'Kirim' })) return;
-      try {
-        await UI.sibuk(b, async ubah => { const r = await API.call('p_kirim_eval', { id_pelatihan: id, jawaban: j }, { retry: 6, onRetry: n => ubah('Mencoba lagi (' + n + ')…') }); UI.toast(r.message); }, 'Mengirim…');
-        sessionStorage.removeItem(kunciSimpan);
-        this.lupakan('p_ruang');
-        location.hash = '#/ruang/' + id + '/evaluasi';
-      } catch (ex) { UI.gagal(ex); }
+      // ⚡ Optimistis: langsung kembali ke ruang pelatihan, pengiriman berjalan di latar.
+      // Draf jawaban tetap tersimpan di HP sampai server mengonfirmasi.
+      const kr = Simpan.kunci('p_ruang', { id_pelatihan: id }), cr = Simpan.get(kr);
+      if (cr) { cr.d.evaluasi.selesai = true; Simpan.set(kr, cr.d); }
+      UI.toast('Terima kasih, evaluasi Anda sedang dikirim…', 'info');
+      location.hash = '#/ruang/' + id + '/evaluasi';
+      API.call('p_kirim_eval', { id_pelatihan: id, jawaban: j }, { retry: 8 })
+        .then(r => { sessionStorage.removeItem(kunciSimpan); UI.toast(r.message); })
+        .catch(ex => {
+          if (/1 kali/.test(ex.message)) { sessionStorage.removeItem(kunciSimpan); return; }
+          if (cr) { cr.d.evaluasi.selesai = false; Simpan.set(kr, cr.d); }
+          UI.gagal('Evaluasi belum terkirim: ' + ex.message + ' — jawaban Anda masih tersimpan, buka Evaluasi lagi untuk mengirim ulang.');
+          if (location.hash.indexOf('#/ruang/' + id) === 0) App.tampil();
+        });
     });
   },
 

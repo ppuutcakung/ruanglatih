@@ -44,16 +44,17 @@ const Admin = {
   togel(kunci, buka, idPel) {
     return '<button class="toggle ' + (buka ? 'on' : '') + '" role="switch" aria-checked="' + !!buka + '" data-aksi="togel" data-k="' + kunci + '" data-p="' + esc(idPel) + '" aria-label="Buka/tutup"></button>';
   },
-  async aksiTogel(b, sesudah) {
-    const buka = !b.classList.contains('on');
-    b.disabled = true;
-    try {
-      const r = await API.call('aktivitas_set', { id_pelatihan: b.dataset.p, kunci: b.dataset.k, buka: buka });
-      b.classList.toggle('on', buka); b.setAttribute('aria-checked', buka);
-      UI.toast(r.message);
-      Kelola.segarkanPel();
-      sesudah && sesudah(r.aktivitas);
-    } catch (e) { UI.gagal(e); } finally { b.disabled = false; }
+  /** ⚡ Optimistis: sakelar berubah seketika, server menyusul di latar; kembali semula bila gagal. */
+  aksiTogel(b, sesudah) {
+    if (b._kirim) return;
+    const buka = !b.classList.contains('on'), idp = b.dataset.p, k = b.dataset.k;
+    const pasang = v => { b.classList.toggle('on', v); b.setAttribute('aria-checked', v); Kelola.ubahPelLokal(idp, x => { x.aktivitas[k] = v; }); sesudah && sesudah(v); };
+    pasang(buka);
+    b._kirim = true;
+    UI.toast((AKTIVITAS.find(a => a[0] === k) || [, k])[1] + (buka ? ' dibuka.' : ' ditutup.'));
+    API.call('aktivitas_set', { id_pelatihan: idp, kunci: k, buka: buka })
+      .catch(e => { pasang(!buka); UI.gagal(e); })
+      .finally(() => { b._kirim = false; });
   },
   /** Kartu kecil buka/tutup untuk halaman tugas & pre-pos test. */
   async panelAktivitas(host, idPel, kunci) {
@@ -65,7 +66,7 @@ const Admin = {
       const a = AKTIVITAS.find(x => x[0] === k);
       return '<div class="row g8" style="min-width:220px"><div class="ic-tile sm">' + UI.ic(a[2], 'sm') + '</div><div class="grow"><div class="semi t-sm">' + a[1] + '</div><div class="t-xs muted">' + (p.aktivitas[k] ? 'Sedang dibuka' : 'Ditutup') + '</div></div>' + this.togel(k, p.aktivitas[k], idPel) + '</div>';
     }).join('') + '</div></div>';
-    if (!host._pasang) { host._pasang = 1; UI.klik(host, { togel: b => this.aksiTogel(b, () => this.panelAktivitas(host, b.dataset.p, kunci)) }); }
+    if (!host._pasang) { host._pasang = 1; UI.klik(host, { togel: b => this.aksiTogel(b, v => { const t = b.parentNode.querySelector('.t-xs'); if (t) t.textContent = v ? 'Sedang dibuka' : 'Ditutup'; }) }); }
   },
 
   // ===========================================================
@@ -76,8 +77,14 @@ const Admin = {
       '<button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button></div><div class="col g20" data-isi></div>';
     const isi = $('[data-isi]', el);
     UI.loading(isi, 3);
-    let d, tab = 'semua', hal = 1;
-    try { d = await API.call('dasbor_admin'); } catch (e) { return UI.galat(isi, e, () => this.dasbor(el)); }
+    let d, tab = 'semua', hal = 1, gambarRekap = () => { };
+    isi.addEventListener('click', e => { const b = e.target.closest('[data-tab] button'); if (b) { tab = b.dataset.v; hal = 1; gambarRekap(); } });
+    UI.klik(el, {
+      segar: b => UI.sibuk(b, async () => { d = await API.call('dasbor_admin'); gambar(); }).catch(UI.gagal),
+      hal: b => { hal = +b.dataset.h; gambarRekap(); },
+      togel: b => this.aksiTogel(b, v => { const s = b.closest('.stage'); if (s) s.classList.toggle('on', v); })
+    });
+    const gambar = () => {
     App.setBadge('tugas', d.ringkas.tugas_menunggu);
     const R = d.ringkas, L = d.live, E = d.evaluasi;
     const sk = { Kuliner: 'KUL', Kerajinan: 'KRJ', Pertanian: 'PTN', Manufaktur: 'MFG' };
@@ -104,7 +111,7 @@ const Admin = {
         st('Evaluasi', 'evaluasi', L.evaluasi.buka, L.evaluasi.terisi + ' / ' + n, 'Form terisi') + '</div></div>';
     }
 
-    const gambarRekap = () => {
+    gambarRekap = () => {
       const f = { semua: () => true, berlangsung: p => p.status === 'berlangsung', selesai: p => p.status === 'selesai', datang: p => p.status === 'akan datang' }[tab];
       const rows = d.rekap.filter(f), per = 5;
       const box = $('[data-rekap]', isi);
@@ -127,12 +134,8 @@ const Admin = {
     isi.innerHTML = stats + live + '<div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);align-items:start" data-dua><div class="card" data-rekap></div><div class="col g20">' + evalBox + logBox + '</div></div>';
     if (window.innerWidth < 1000) $('[data-dua]', isi).style.gridTemplateColumns = '1fr';
     gambarRekap();
-    isi.addEventListener('click', e => { const b = e.target.closest('[data-tab] button'); if (b) { tab = b.dataset.v; hal = 1; gambarRekap(); } });
-    UI.klik(el, {
-      segar: () => this.dasbor(el),
-      hal: b => { hal = +b.dataset.h; gambarRekap(); },
-      togel: b => this.aksiTogel(b, () => { const s = b.closest('.stage'); if (s) s.classList.toggle('on', b.classList.contains('on')); })
-    });
+    };
+    try { await API.ambil('dasbor_admin', {}, x => { d = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, () => this.dasbor(el)); }
   },
 
   // ===========================================================
@@ -151,15 +154,17 @@ const Admin = {
     };
     const muat = async () => {
       UI.loading(isi, 2);
-      try {
-        rows = await Kelola.daftarPel(true);
+      try { await API.ambil('pelatihan_list', {}, x => { rows = x; if (!$('[data-list]', isi)) kerangka(); gambar(); }, { el: isi }); }
+      catch (e) { UI.galat(isi, e, muat); }
+    };
+    const kerangka = () => {
+      {
         isi.innerHTML = '<div class="card"><div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-f>' + [['semua', 'Semua'], ['berlangsung', 'Berlangsung'], ['akan datang', 'Akan Datang'], ['selesai', 'Selesai']].map(x => '<button data-v="' + x[0] + '" class="' + (f === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
           '<div class="input-ic" style="min-width:240px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari judul atau instruktur…" data-q></div></div><div data-list></div></div>';
         $('[data-f]', isi).onclick = e => { const b = e.target.closest('button'); if (!b) return; f = b.dataset.v; $$('[data-f] button', isi).forEach(x => x.classList.toggle('on', x === b)); gambar(); };
         $('[data-q]', isi).oninput = e => { q = e.target.value.toLowerCase(); gambar(); };
         $('[data-list]', isi).onclick = e => { const r = e.target.closest('[data-buka]'); if (r) location.hash = '#/pelatihan/' + r.dataset.buka; };
-        gambar();
-      } catch (e) { UI.galat(isi, e, muat); }
+      }
     };
     UI.klik(el, { baru: () => this.formPelatihan(null, id => { location.hash = '#/pelatihan/' + id; }) });
     muat();
@@ -167,7 +172,7 @@ const Admin = {
 
   async formPelatihan(p, sesudah) {
     let ins;
-    try { ins = await API.call('instruktur_list'); } catch (e) { return UI.gagal(e); }
+    try { ins = await API.cepat('instruktur_list'); } catch (e) { return UI.gagal(e); }
     if (!ins.length) return UI.toast('Tambahkan instruktur terlebih dahulu di menu Instruktur.', 'info');
     p = p || { cakupan: 'umum', format: 'tatap muka', status: 'akan datang', jumlah_hari: '' };
     UI.form({
@@ -211,7 +216,7 @@ const Admin = {
     UI.loading(isi, 3);
     let d, tab = sessionStorage.getItem('rl_ptab') || 'peserta';
     const muat = async () => {
-      try { d = await API.call('pelatihan_detail', { id_pelatihan: id }); gambar(); } catch (e) { UI.galat(isi, e, muat); }
+      try { await API.ambil('pelatihan_detail', { id_pelatihan: id }, x => { d = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
     };
     const gambar = () => {
       const p = d.pelatihan;
@@ -236,10 +241,13 @@ const Admin = {
       flyer: b => this.unggahFlyer(b, id, muat),
       daftar: () => this.modalDaftarkan(d, muat),
       keluar: async b => {
+        const x = d.peserta.find(y => y.id_umkm === b.dataset.id);
+        if (x && (x.hadir || x.pre !== null || x.post !== null)) return UI.toast('Peserta sudah memiliki absensi/nilai, tidak bisa dikeluarkan.', 'bad');
         if (!await UI.konfirmasi('Keluarkan <b>' + esc(b.dataset.n) + '</b> dari pelatihan ini?', { ok: 'Keluarkan', bahaya: true })) return;
-        try { const r = await API.call('peserta_hapus', { id_pelatihan: id, id_umkm: b.dataset.id }); UI.toast(r.message); muat(); } catch (e) { UI.gagal(e); }
+        const lama = d.peserta; d.peserta = d.peserta.filter(y => y.id_umkm !== b.dataset.id); gambar(); UI.toast('Peserta dikeluarkan.');
+        API.call('peserta_hapus', { id_pelatihan: id, id_umkm: b.dataset.id }).catch(e => { d.peserta = lama; gambar(); UI.gagal(e); });
       },
-      togel: b => this.aksiTogel(b, akt => { d.pelatihan.aktivitas = akt; }),
+      togel: b => this.aksiTogel(b, v => { d.pelatihan.aktivitas[b.dataset.k] = v; }),
       syarat: async b => {
         const sy = {};
         SYARAT.forEach(s => sy[s[0]] = $('[name="sy_' + s[0] + '"]', isi).checked);
@@ -308,7 +316,7 @@ const Admin = {
     const box = $('[data-b]', m.el);
     UI.loading(box, 2);
     let umkm;
-    try { umkm = (await API.call('umkm_list')).filter(u => u.status_akun === 'aktif' && !ada[u.id_umkm]); } catch (e) { return UI.galat(box, e); }
+    try { umkm = (await API.cepat('umkm_list')).filter(u => u.status_akun === 'aktif' && !ada[u.id_umkm]); } catch (e) { return UI.galat(box, e); }
     const pilih = {};
     let q = '', sek = p.cakupan === 'sektor' ? p.sektor : '';
     const info = $('[data-info]', m.el), kirim = $('[data-kirim]', m.el);
@@ -342,13 +350,15 @@ const Admin = {
     let rows = [];
     const muat = async () => {
       UI.loading(isi, 2);
-      try {
-        rows = await API.call('instruktur_list');
+      try { await API.ambil('instruktur_list', {}, x => { rows = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+    };
+    const gambar = () => {
+      {
         isi.innerHTML = '<div class="card">' + (rows.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nama</th><th>Kode akses</th><th>Tema diajar</th><th class="num">Pelatihan</th><th>Status</th><th></th></tr></thead><tbody>' +
           rows.map(i => '<tr><td class="semi">' + esc(i.nama) + '</td><td><button class="chip line" data-aksi="salin" data-k="' + esc(i.kode_akses) + '">' + UI.ic('key', 'sm') + esc(i.kode_akses) + '</button></td><td class="muted">' + esc(i.tema_diajar || '-') + '</td><td class="num">' + i.jumlah_pelatihan + '</td>' +
             '<td>' + (i.status === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip info sm">Nonaktif</span>') + '</td><td><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(i.id_instruktur) + '">' + UI.ic('edit', 'sm') + '</button></td></tr>').join('') + '</tbody></table></div>'
           : UI.kosong('Belum ada instruktur.', 'user')) + '</div>';
-      } catch (e) { UI.galat(isi, e, muat); }
+      }
     };
     const form = i => {
       i = i || { status: 'aktif' };
@@ -388,17 +398,22 @@ const Admin = {
         '</tbody></table></div>' + UI.halaman(t.length, hal, per) : UI.kosong(rows.length ? 'Tidak ada UMKM yang cocok.' : 'Belum ada data UMKM. Tambah satu per satu atau impor dari Excel.', 'users');
     };
     const muat = async () => {
-      UI.loading(isi, 2);
-      try {
-        rows = await API.call('umkm_list');
-        const n = s => rows.filter(u => u.sektor === s).length;
-        isi.innerHTML = '<div class="grid g4">' + SEKTOR.map(s => '<div class="card stat"><span class="l">' + s + '</span><span class="v">' + n(s) + '</span></div>').join('') + '</div>' +
-          '<div class="card mt20"><div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-s><button data-v="" class="on">Semua (' + rows.length + ')</button>' + SEKTOR.map(s => '<button data-v="' + s + '">' + s + '</button>').join('') + '</div>' +
+      if (!$('[data-list]', isi)) UI.loading(isi, 2);
+      try { await API.ambil('umkm_list', {}, x => { rows = x; pasang(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+    };
+    const pasang = () => {
+      if (!$('[data-list]', isi)) {
+        isi.innerHTML = '<div class="grid g4" data-stat></div>' +
+          '<div class="card mt20"><div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-s><button data-v="" class="on">Semua</button>' + SEKTOR.map(s => '<button data-v="' + s + '">' + s + '</button>').join('') + '</div>' +
           '<div class="input-ic" style="min-width:240px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari UMKM, pemilik, HP…" data-q></div></div><div data-list></div></div>';
         $('[data-s]', isi).onclick = e => { const b = e.target.closest('button'); if (!b) return; sek = b.dataset.v; hal = 1; $$('[data-s] button', isi).forEach(x => x.classList.toggle('on', x === b)); gambar(); };
-        $('[data-q]', isi).oninput = e => { q = e.target.value.toLowerCase(); hal = 1; gambar(); };
-        gambar();
-      } catch (e) { UI.galat(isi, e, muat); }
+        let tunda;
+        $('[data-q]', isi).oninput = e => { clearTimeout(tunda); tunda = setTimeout(() => { q = e.target.value.toLowerCase(); hal = 1; gambar(); }, 150); };
+      }
+      const n = s => rows.filter(u => u.sektor === s).length;
+      $('[data-stat]', isi).innerHTML = SEKTOR.map(s => '<div class="card stat"><span class="l">' + s + '</span><span class="v">' + n(s) + '</span></div>').join('');
+      $('[data-s] button[data-v=""]', isi).textContent = 'Semua (' + rows.length + ')';
+      gambar();
     };
     const tampilPin = (u, pin, judul) => {
       const pesan = 'Halo ' + u.nama_pemilik + ', akun RuangLatih ' + u.nama_umkm + ' siap dipakai.\nMasuk: ' + location.origin + location.pathname + '\nNomor WhatsApp: ' + u.no_hp + '\nPIN: ' + pin + '\nAnda akan diminta mengganti PIN saat pertama masuk.';
@@ -435,12 +450,14 @@ const Admin = {
       reset: async b => {
         const u = rows.find(x => x.id_umkm === b.dataset.id);
         if (!await UI.konfirmasi('Buat PIN baru untuk <b>' + esc(u.nama_umkm) + '</b>? Kunci akun (bila terkunci) juga dibuka.', { ok: 'Reset PIN' })) return;
-        try { const r = await API.call('umkm_reset_pin', { id_umkm: u.id_umkm }); muat(); tampilPin(u, r.pin, 'PIN baru'); } catch (e) { UI.gagal(e); }
+        try { const r = await API.call('umkm_reset_pin', { id_umkm: u.id_umkm }); u.pin = r.pin; u.wajib_ganti_pin = 'ya'; gambar(); tampilPin(u, r.pin, 'PIN baru'); } catch (e) { UI.gagal(e); }
       },
       status: async b => {
         const u = rows.find(x => x.id_umkm === b.dataset.id);
         if (u.status_akun === 'aktif' && !await UI.konfirmasi('Nonaktifkan akun <b>' + esc(u.nama_umkm) + '</b>? Peserta tidak bisa masuk sampai diaktifkan kembali.', { ok: 'Nonaktifkan', bahaya: true })) return;
-        try { const r = await API.call('umkm_status', { id_umkm: u.id_umkm }); UI.toast(r.message); muat(); } catch (e) { UI.gagal(e); }
+        const lama = u.status_akun; u.status_akun = lama === 'aktif' ? 'nonaktif' : 'aktif'; gambar();
+        UI.toast('Akun ' + u.nama_umkm + ' sekarang ' + u.status_akun + '.');
+        API.call('umkm_status', { id_umkm: u.id_umkm }).catch(e => { u.status_akun = lama; gambar(); UI.gagal(e); });
       },
       impor: () => this.modalImpor(muat)
     });
@@ -490,7 +507,8 @@ const Admin = {
       if (!idPel) { isi.innerHTML = Kelola.tanpaPelatihan(); return; }
       UI.loading(isi, 2);
       try {
-        const d = await API.call('pelatihan_detail', { id_pelatihan: idPel });
+        const idA = idPel;
+        await API.ambil('pelatihan_detail', { id_pelatihan: idA }, d => { if (idA !== idPel) return;
         const p = d.pelatihan, n = d.peserta.length;
         isi.innerHTML = '<div class="grid ' + (p.jumlah_hari === 2 ? 'g2' : '') + '">' + p.tanggal_hari.map((t, i) => {
           const h = i + 1, hadir = d.peserta.filter(x => x.absen[h]).length, k = 'absen_' + h;
@@ -501,9 +519,13 @@ const Admin = {
           (n ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th>' + p.tanggal_hari.map((t, i) => '<th>Hari ' + (i + 1) + '</th>').join('') + '<th>Total</th></tr></thead><tbody>' +
             d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + '</div></td>' + p.tanggal_hari.map((t, i) => '<td>' + (x.absen[i + 1] ? '<span class="chip ok sm">' + UI.ic('check', 'sm') + UI.jam(x.absen[i + 1]) + '</span>' : '<span class="chip line sm">Belum</span>') + '</td>').join('') +
               '<td class="semi">' + x.hadir + '/' + x.jumlah_hari + '</td></tr>').join('') + '</tbody></table></div>' : UI.kosong('Belum ada peserta terdaftar.', 'users')) + '</div>';
+        }, { el: isi, segar: 3000 });
       } catch (e) { UI.galat(isi, e, muat); }
     };
-    UI.klik(el, { segar: () => muat(), togel: b => this.aksiTogel(b, () => muat()) });
+    UI.klik(el, {
+      segar: b => UI.sibuk(b, async () => { await API.call('pelatihan_detail', { id_pelatihan: idPel }); muat(); }).catch(UI.gagal),
+      togel: b => this.aksiTogel(b, v => { const t = b.parentNode.querySelector('.t-sm.semi'); if (t) t.textContent = v ? 'Dibuka' : 'Ditutup'; })
+    });
     try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); }); } catch (e) { UI.galat(isi, e, () => this.absensi(el)); }
   },
 
@@ -520,9 +542,10 @@ const Admin = {
       if (!idPel) { isi.innerHTML = Kelola.tanpaPelatihan(); return; }
       UI.loading(isi, 3);
       try {
-        const d = await API.call('eval_hasil', { id_pelatihan: idPel });
-        const pb = d.per_bagian, csi = v => v === null ? '–' : UI.angka(v / 4 * 100) + '%';
+        const idA = idPel;
         const pel = await Kelola.daftarPel();
+        await API.ambil('eval_hasil', { id_pelatihan: idA }, d => { if (idA !== idPel || mode !== 'hasil') return;
+        const pb = d.per_bagian, csi = v => v === null ? '–' : UI.angka(v / 4 * 100) + '%';
         const p = pel.find(x => x.id_pelatihan === idPel) || d.pelatihan;
         isi.innerHTML = '<div class="card tight row wrap between" style="margin-bottom:20px"><div class="row g8"><div class="ic-tile sm">' + UI.ic('edit', 'sm') + '</div><div><div class="semi t-sm">Form evaluasi untuk peserta</div><div class="t-xs muted">' + (p.aktivitas.evaluasi ? 'Sedang dibuka' : 'Ditutup') + '</div></div></div>' + this.togel('evaluasi', p.aktivitas.evaluasi, idPel) + '</div>' +
           '<div class="grid g4"><div class="card stat"><span class="l">Responden</span><span class="v">' + d.jumlah_jawaban + ' <span class="t-sm muted">/ ' + d.jumlah_peserta + '</span></span></div>' +
@@ -536,6 +559,7 @@ const Admin = {
                 '<div class="row g4 mt8" style="height:10px;border-radius:5px;overflow:hidden;gap:2px">' + h.distribusi.map((x, i) => x ? '<span title="Skala ' + (i + 1) + ': ' + x + '" style="height:100%;flex:' + x + ';background:' + ['#E8B4BF', '#D08597', '#B35467', '#6E2D3B'][i] + '"></span>' : '').join('') + (h.distribusi.every(x => !x) ? '<span style="flex:1;height:100%;background:var(--blush-2)"></span>' : '') + '</div>' +
                 '<div class="t-xs muted mt8">' + h.distribusi.map((x, i) => (i + 1) + ': ' + x + ' (' + Math.round(x / tot * 100) + '%)').join(' · ') + '</div></div>'; })()).join('') + '</div></div>';
           }).join('') + '<div class="legend mt12">' + ['Sangat tidak setuju', 'Tidak setuju', 'Setuju', 'Sangat setuju'].map((s, i) => '<span><i style="background:' + ['#E8B4BF', '#D08597', '#B35467', '#6E2D3B'][i] + '"></i>' + (i + 1) + ' ' + s + '</span>').join('') + '</div>';
+        }, { el: isi });
       } catch (e) { UI.galat(isi, e, hasil); }
     };
     const form = async () => {
@@ -594,7 +618,8 @@ const Admin = {
     const muat = async () => {
       if (!idPel) { isi.innerHTML = Kelola.tanpaPelatihan(); return; }
       UI.loading(isi, 3);
-      try { d = await API.call('sert_status', { id_pelatihan: idPel }); gambar(); } catch (e) { UI.galat(isi, e, muat); }
+      const idA = idPel;
+      try { await API.ambil('sert_status', { id_pelatihan: idA }, x => { if (idA === idPel && !isi._terbit) { d = x; gambar(); } }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
     };
     const gambar = () => {
       const t = d.template, r = d.ringkas;
@@ -617,6 +642,7 @@ const Admin = {
     };
     const terbitkan = async (b, ulang) => {
       const bar = $('[data-pbar]', isi), teks = $('[data-pteks]', isi);
+      isi._terbit = true;
       bar.hidden = false;
       $$('button', isi).forEach(x => x.disabled = true);
       try {
@@ -630,6 +656,7 @@ const Admin = {
         } while (r.sisa > 0);
         UI.toast(r.message);
       } catch (e) { UI.gagal(e); teks.textContent = e.message + ' — klik Terbitkan lagi untuk melanjutkan.'; }
+      isi._terbit = false;
       muat();
     };
     UI.klik(isi, {
@@ -661,7 +688,7 @@ const Admin = {
     const isi = $('[data-isi]', el);
     UI.loading(isi, 3);
     let d, f = { id_pelatihan: '', sektor: '', bulan: '', nama: '' }, hal = 1;
-    try { d = await API.call('laporan_data'); } catch (e) { return UI.galat(isi, e, () => this.laporan(el)); }
+    try { d = await API.cepat('laporan_data'); } catch (e) { return UI.galat(isi, e, () => this.laporan(el)); }
     const pel = {};
     d.rekap.forEach(r => pel[r.id_pelatihan] = r.pelatihan);
     d.evaluasi.forEach(e => pel[e.id_pelatihan] = pel[e.id_pelatihan] || e.judul);
@@ -722,17 +749,19 @@ const Admin = {
         '</tbody></table></div>' + UI.halaman(t.length, hal, per) : UI.kosong('Tidak ada log.', 'history');
     };
     const muat = async () => {
-      UI.loading(isi, 2);
+      if (!$('[data-list]', isi)) UI.loading(isi, 2);
       try {
-        rows = await API.call('log_list', { limit: 1000 });
+        await API.ambil('log_list', { limit: 1000 }, x => { rows = x; if (!$('[data-list]', isi)) {
         isi.innerHTML = '<div class="card"><div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-p>' + [['', 'Semua'], ['admin', 'Admin'], ['instruktur', 'Instruktur'], ['peserta', 'Peserta']].map(x => '<button data-v="' + x[0] + '" class="' + (peran === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
           '<div class="input-ic" style="min-width:240px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari aktivitas…" data-q></div></div><div data-list></div></div>';
         $('[data-p]', isi).onclick = e => { const b = e.target.closest('button'); if (!b) return; peran = b.dataset.v; hal = 1; $$('[data-p] button', isi).forEach(x => x.classList.toggle('on', x === b)); gambar(); };
         $('[data-q]', isi).oninput = e => { q = e.target.value.toLowerCase(); hal = 1; gambar(); };
+        }
         gambar();
+        }, { el: isi });
       } catch (e) { UI.galat(isi, e, muat); }
     };
-    UI.klik(el, { segar: muat, hal: b => { hal = +b.dataset.h; gambar(); } });
+    UI.klik(el, { segar: b => UI.sibuk(b, async () => { rows = await API.call('log_list', { limit: 1000 }); gambar(); }).catch(UI.gagal), hal: b => { hal = +b.dataset.h; gambar(); } });
     muat();
   },
 
@@ -745,12 +774,13 @@ const Admin = {
     const muat = async () => {
       UI.loading(isi, 2);
       try {
-        const rows = await API.call('admin_list');
+        await API.ambil('admin_list', {}, rows => {
         isi.innerHTML = '<div class="grid g2" style="align-items:start"><div class="card"><div class="card-h"><div class="h-sm">Akun Admin</div><span class="chip sm">' + rows.length + '</span></div><div class="list">' +
           rows.map(a => '<div class="item"><div class="ic-tile sm solid">' + esc(UI.inisial(a.nama)) + '</div><div class="grow"><div class="semi">' + esc(a.nama) + (a.saya ? ' <span class="chip sm">Anda</span>' : '') + '</div><div class="t-xs muted">@' + esc(a.username) + '</div></div>' +
             (a.saya ? '' : '<button class="btn icon sm danger" data-aksi="hapus" data-u="' + esc(a.username) + '">' + UI.ic('trash', 'sm') + '</button>') + '</div>').join('') + '</div></div>' +
           '<div class="card"><div class="h-sm">Ganti Kata Sandi Saya</div><div class="t-sm muted">Minimal 8 karakter. Segera ganti kata sandi bawaan setelah instalasi.</div><button class="btn secondary sm mt12" data-aksi="sandi">' + UI.ic('key', 'sm') + 'Ganti kata sandi</button>' +
           '<div class="card well tight mt20"><div class="semi t-sm">Hak akses per peran</div><div class="t-sm muted mt8">Super Admin: semua menu. Instruktur: hanya pelatihan miliknya (materi, soal, tugas & nilai) — tidak dapat melihat evaluasi. Peserta: hanya pelatihan yang diikuti. Diperiksa di server pada setiap permintaan.</div></div></div></div>';
+        }, { el: isi });
       } catch (e) { UI.galat(isi, e, muat); }
     };
     UI.klik(el, {
@@ -780,7 +810,7 @@ const Admin = {
     const isi = $('[data-isi]', el);
     UI.loading(isi, 2);
     let s;
-    try { s = await API.call('pengaturan_get'); } catch (e) { return UI.galat(isi, e, () => this.pengaturan(el)); }
+    try { s = await API.cepat('pengaturan_get'); } catch (e) { return UI.galat(isi, e, () => this.pengaturan(el)); }
     const sy = s.SYARAT_LULUS_DEFAULT || {};
     isi.innerHTML = '<div class="grid g2" style="align-items:start"><div class="card col g20"><div class="h-sm">Umum & Sertifikat</div>' +
       '<div class="field"><label>Nama lembaga</label><input class="input" name="NAMA_LEMBAGA" value="' + esc(s.NAMA_LEMBAGA) + '"></div>' +
@@ -811,7 +841,7 @@ const Admin = {
     if (!q) { isi.innerHTML = '<div class="card">' + UI.kosong('Cari peserta UMKM, pelatihan, materi, atau instruktur.', 'search') + '</div>'; return; }
     UI.loading(isi, 3);
     try {
-      const [pel, umkm, mat, ins] = await Promise.all([Kelola.daftarPel(true), API.call('umkm_list'), API.call('materi_list'), API.call('instruktur_list')]);
+      const [pel, umkm, mat, ins] = await Promise.all([Kelola.daftarPel(), API.cepat('umkm_list'), API.cepat('materi_list'), API.cepat('instruktur_list')]);
       const k = q.toLowerCase(), cocok = s => String(s).toLowerCase().indexOf(k) >= 0;
       const P = pel.filter(p => cocok(p.judul + ' ' + p.tema + ' ' + p.instruktur)), U = umkm.filter(u => cocok(u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp + ' ' + u.spesialisasi)),
         M = mat.filter(m => cocok(m.judul + ' ' + m.pelatihan)), I = ins.filter(i => cocok(i.nama + ' ' + i.tema_diajar));

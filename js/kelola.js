@@ -5,17 +5,22 @@
    rekap nilai. Hak akses tetap diperiksa di server.
    ============================================================= */
 const Kelola = {
-  _pel: null, _pelWaktu: 0,
-
   peran() { const u = Sesi.user(); return u ? u.peran : ''; },
 
+  /** Daftar pelatihan: langsung dari cache (instan), disegarkan diam-diam di latar. */
   async daftarPel(paksa) {
-    if (!paksa && this._pel && Date.now() - this._pelWaktu < 60000) return this._pel;
-    this._pel = await API.call('pelatihan_list');
-    this._pelWaktu = Date.now();
-    return this._pel;
+    const c = Simpan.get(Simpan.kunci('pelatihan_list', {}));
+    if (c && !paksa) { if (Date.now() - c.t > 20000) API.call('pelatihan_list').catch(() => { }); return c.d; }
+    return API.call('pelatihan_list');
   },
-  segarkanPel() { this._pel = null; },
+  segarkanPel() { /* cache dibasikan otomatis oleh aksi tulis */ },
+  /** Pembaruan optimistis: ubah daftar pelatihan di cache lokal tanpa menunggu server. */
+  ubahPelLokal(id, fn) {
+    const k = Simpan.kunci('pelatihan_list', {}), c = Simpan.get(k);
+    if (!c) return;
+    const p = c.d.find(x => x.id_pelatihan === id);
+    if (p) { fn(p); Simpan.set(k, c.d); }
+  },
 
   pilihanAwal(list) {
     const simpan = sessionStorage.getItem('rl_pel');
@@ -59,10 +64,15 @@ const Kelola = {
     el.innerHTML = this.kepala('Bank Materi', 'Modul PDF pelatihan · tersimpan di Google Drive', '<span data-picker></span><button class="btn primary sm" data-aksi="unggah">' + UI.ic('upload', 'sm') + 'Unggah PDF</button>') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     let idPel = '', pel = null;
+    let rows = [];
     const muat = async () => {
+      const id = idPel;
       UI.loading(isi, 2);
-      try {
-        const rows = await API.call('materi_list', idPel ? { id_pelatihan: idPel } : {});
+      try { await API.ambil('materi_list', id ? { id_pelatihan: id } : {}, d => { if (id === idPel) { rows = d; gambar(); } }, { el: isi }); }
+      catch (e) { UI.galat(isi, e, muat); }
+    };
+    const gambar = () => {
+      {
         if (!rows.length) { isi.innerHTML = '<div class="card">' + UI.kosong(idPel ? 'Belum ada materi untuk pelatihan ini. Unggah PDF modul pertama.' : 'Belum ada materi.', 'book') + '</div>'; return; }
         const total = rows.reduce((s, m) => s + m.ukuran, 0);
         isi.innerHTML = '<div class="grid g3"><div class="card stat"><span class="l">Jumlah modul</span><span class="v">' + rows.length + '</span></div>' +
@@ -73,13 +83,15 @@ const Kelola = {
             '<div class="meta"><span>' + UI.ukuran(m.ukuran) + '</span><span>' + esc(m.cakupan === 'sektor' ? 'Sektor ' + m.sektor : 'Umum') + '</span>' + (idPel ? '' : '<span>' + esc(m.pelatihan) + '</span>') + '<span>' + UI.tglPendek(m.tgl) + '</span></div></div>' +
             '<div class="row g4"><a class="btn icon sm secondary" href="' + esc(m.url_lihat) + '" target="_blank" rel="noopener" title="Lihat">' + UI.ic('eye', 'sm') + '</a>' +
             '<button class="btn icon sm danger" data-aksi="hapus" data-id="' + esc(m.id_materi) + '" data-j="' + esc(m.judul) + '" title="Hapus">' + UI.ic('trash', 'sm') + '</button></div></div>').join('') + '</div></div>';
-      } catch (e) { UI.galat(isi, e, muat); }
+      }
     };
     UI.klik(el, {
       unggah: () => { if (!idPel) return UI.toast('Pilih satu pelatihan terlebih dahulu.', 'info'); this.modalUnggah(pel, muat); },
       hapus: async b => {
         if (!await UI.konfirmasi('Hapus materi <b>' + esc(b.dataset.j) + '</b>? File di Google Drive ikut dipindahkan ke sampah.', { ok: 'Hapus', bahaya: true })) return;
-        try { const r = await API.call('materi_hapus', { id_materi: b.dataset.id }); UI.toast(r.message); muat(); } catch (e) { UI.gagal(e); }
+        // Optimistis: hilang dari daftar seketika, server menyusul di latar
+        const lama = rows; rows = rows.filter(m => m.id_materi !== b.dataset.id); gambar(); UI.toast('Materi dihapus.');
+        API.call('materi_hapus', { id_materi: b.dataset.id }).catch(e => { rows = lama; gambar(); UI.gagal(e); });
       }
     });
     try {
@@ -173,8 +185,9 @@ const Kelola = {
     };
     const muat = async () => {
       if (!idPel) { isi.innerHTML = this.tanpaPelatihan(); return; }
+      const id = idPel;
       UI.loading(isi, 2);
-      try { data = await API.call('soal_list', { id_pelatihan: idPel }); gambar(); } catch (e) { UI.galat(isi, e, muat); }
+      try { await API.ambil('soal_list', { id_pelatihan: id }, d => { if (id === idPel) { data = d; gambar(); } }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
     };
     const editor = x => {
       x = x || { jenis: 'pre+post', kunci: 'a' };
@@ -199,7 +212,8 @@ const Kelola = {
       ubah: b => editor(data.soal.find(x => x.id_soal === b.dataset.id)),
       hapus: async b => {
         if (!await UI.konfirmasi('Hapus soal ini dari bank soal?', { ok: 'Hapus', bahaya: true })) return;
-        try { const r = await API.call('soal_hapus', { id_soal: b.dataset.id }); UI.toast(r.message); muat(); } catch (e) { UI.gagal(e); }
+        const lama = data.soal; data.soal = data.soal.filter(x => x.id_soal !== b.dataset.id); gambar(); UI.toast('Soal dihapus.');
+        API.call('soal_hapus', { id_soal: b.dataset.id }).catch(e => { data.soal = lama; gambar(); UI.gagal(e); });
       }
     });
     isi.addEventListener('click', e => { const b = e.target.closest('[data-f] button'); if (b) { filter = b.dataset.v; gambar(); } });
@@ -232,8 +246,9 @@ const Kelola = {
           : UI.kosong('Belum ada tugas.', 'clipboard')) + '</div></div>';
     };
     const muat = async () => {
+      const id = idPel;
       UI.loading(isi, 2);
-      try { data = await API.call('tugas_list', idPel ? { id_pelatihan: idPel } : {}); gambar(); } catch (e) { UI.galat(isi, e, muat); }
+      try { await API.ambil('tugas_list', id ? { id_pelatihan: id } : {}, d => { if (id === idPel) { data = d; gambar(); } }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
     };
     const editor = t => {
       t = t || {};
@@ -254,11 +269,14 @@ const Kelola = {
       buat: () => idPel ? editor() : UI.toast('Pilih satu pelatihan terlebih dahulu.', 'info'),
       ubahT: b => editor(data.tugas.find(t => t.id_tugas === b.dataset.id)),
       hapusT: async b => {
-        if (!await UI.konfirmasi('Hapus tugas ini? Tugas yang sudah punya kiriman tidak dapat dihapus.', { ok: 'Hapus', bahaya: true })) return;
-        try { const r = await API.call('tugas_hapus', { id_tugas: b.dataset.id }); UI.toast(r.message); muat(); } catch (e) { UI.gagal(e); }
+        const t = data.tugas.find(x => x.id_tugas === b.dataset.id);
+        if (t && t.jumlah_kumpul) return UI.toast('Tugas sudah punya kiriman peserta, tidak bisa dihapus.', 'bad');
+        if (!await UI.konfirmasi('Hapus tugas ini?', { ok: 'Hapus', bahaya: true })) return;
+        const lama = data.tugas; data.tugas = data.tugas.filter(x => x.id_tugas !== b.dataset.id); gambar(); UI.toast('Tugas dihapus.');
+        API.call('tugas_hapus', { id_tugas: b.dataset.id }).catch(e => { data.tugas = lama; gambar(); UI.gagal(e); });
       }
     };
-    this.pasangAksiKumpul(peta, () => data.pengumpulan, muat);
+    this.pasangAksiKumpul(peta, () => data.pengumpulan, () => gambar());
     UI.klik(el, peta);
     isi.addEventListener('click', e => { const b = e.target.closest('[data-tab] button'); if (b) { tab = b.dataset.v; gambar(); } });
     isi.addEventListener('input', e => { if (e.target.matches('[data-cari]')) { cari = e.target.value; const pos = e.target.selectionStart; gambar(); const c = $('[data-cari]', isi); c.focus(); c.setSelectionRange(pos, pos); } });
@@ -296,8 +314,12 @@ const Kelola = {
         onOpen: m => { const b = $('[data-lihat]', m.el); b.dataset.t = k.id_tugas; b.dataset.u = k.id_umkm; b.onclick = () => peta.lihatK(b); },
         onSubmit: async v => {
           if (v.skor === '' || isNaN(+v.skor) || +v.skor < 0 || +v.skor > 100) throw new Error('Skor harus angka 0–100.');
-          const r = await API.call('tugas_nilai', { id_tugas: k.id_tugas, id_umkm: k.id_umkm, skor: +v.skor, catatan: v.catatan });
-          UI.toast(r.message); sesudah && sesudah();
+          // Optimistis: tampil "dinilai" seketika, simpan ke server di latar
+          const lama = { skor: k.skor, catatan: k.catatan, dinilai: k.dinilai };
+          Object.assign(k, { skor: +v.skor, catatan: v.catatan, dinilai: true });
+          sesudah && sesudah(); UI.toast('Nilai ' + k.nama_umkm + ' tersimpan.');
+          API.call('tugas_nilai', { id_tugas: k.id_tugas, id_umkm: k.id_umkm, skor: +v.skor, catatan: v.catatan })
+            .catch(e => { Object.assign(k, lama); sesudah && sesudah(); UI.gagal(e); });
         }
       });
     };
@@ -312,9 +334,12 @@ const Kelola = {
     let idPel = '', d = null;
     const muat = async () => {
       if (!idPel) { isi.innerHTML = this.tanpaPelatihan(); return; }
+      const id = idPel;
       UI.loading(isi, 3);
-      try {
-        d = await API.call('nilai_rekap', { id_pelatihan: idPel });
+      try { await API.ambil('nilai_rekap', { id_pelatihan: id }, x => { if (id === idPel) { d = x; gambar(); } }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+    };
+    const gambar = () => {
+      {
         const r = d.rata, rows = d.rows;
         const naik = rows.filter(x => x.kenaikan !== null && x.kenaikan > 0).length;
         isi.innerHTML = '<div class="grid g4"><div class="card stat"><span class="l">Rata-rata Pre-test</span><span class="v">' + UI.angka(r.pre) + '</span></div>' +
@@ -328,7 +353,7 @@ const Kelola = {
             rows.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + '</div></td><td>' + esc(x.sektor) + '</td><td class="num">' + x.hadir + '/' + x.jumlah_hari + '</td><td class="num">' + UI.angka(x.pre) + '</td><td class="num">' + UI.angka(x.post) + '</td>' +
               '<td class="num ' + (x.kenaikan > 0 ? 'c-ok' : (x.kenaikan !== null ? 'c-bad' : '')) + '">' + (x.kenaikan === null ? '–' : (x.kenaikan > 0 ? '+' : '') + UI.angka(x.kenaikan)) + '</td><td class="num">' + UI.angka(x.skor_tugas) + '</td><td>' + UI.chipLulus(x.lulus) + '</td></tr>').join('') +
             '</tbody></table></div>' : UI.kosong('Belum ada peserta terdaftar.', 'users')) + '</div>';
-      } catch (e) { UI.galat(isi, e, muat); }
+      }
     };
     UI.klik(el, {
       csv: () => {

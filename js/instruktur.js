@@ -24,7 +24,10 @@ const Instruktur = {
     const isi = $('[data-isi]', el);
     UI.loading(isi, 3);
     let d;
-    try { d = await API.call('dasbor_instruktur'); } catch (e) { return UI.galat(isi, e, () => this.dasbor(el)); }
+    const peta = {};
+    Kelola.pasangAksiKumpul(peta, () => d.antrean, () => { d.ringkas.tugas_menunggu = d.antrean.filter(k => !k.dinilai).length; gambar(); });
+    UI.klik(isi, peta); // dipasang sekali
+    const gambar = () => {
     App.setBadge('tugas', d.ringkas.tugas_menunggu);
     const L = d.live, r = d.ringkas;
     let hero;
@@ -51,7 +54,7 @@ const Instruktur = {
         L && L.pre !== null ? UI.angka(L.pre) + ' → ' + UI.angka(L.post) : 'Belum ada post-test', '#/nilai', 'Rekap Nilai', 'ok') + '</div>';
 
     const antre = '<div class="card"><div class="card-h"><div class="ttl"><span class="h-md">Tugas Peserta</span><span class="chip sm">' + r.tugas_menunggu + ' Antrean</span></div></div>' +
-      (d.antrean.length ? '<div class="list">' + d.antrean.map(k => Kelola.itemKumpul(k, true)).join('') + '</div>' : UI.kosong('Tidak ada tugas yang menunggu penilaian.', 'checkSquare')) +
+      (d.antrean.some(k => !k.dinilai) ? '<div class="list">' + d.antrean.filter(k => !k.dinilai).map(k => Kelola.itemKumpul(k, true)).join('') + '</div>' : UI.kosong('Tidak ada tugas yang menunggu penilaian.', 'checkSquare')) +
       '<div class="center mt12"><a class="link" href="#/tugas">Buka Semua Antrean Tugas' + UI.ic('chevR', 'sm') + '</a></div></div>';
 
     let efek = '';
@@ -68,9 +71,8 @@ const Instruktur = {
     }
     isi.innerHTML = hero + stats + '<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start" data-dua>' + antre + '<div class="col g20">' + efek + '</div></div>';
     if (window.innerWidth < 1000) $('[data-dua]', isi).style.gridTemplateColumns = '1fr';
-    const peta = {};
-    Kelola.pasangAksiKumpul(peta, () => d.antrean, () => this.dasbor(el));
-    UI.klik(isi, peta);
+    };
+    try { await API.ambil('dasbor_instruktur', {}, x => { d = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, () => this.dasbor(el)); }
   },
 
   async riwayat(el) {
@@ -78,7 +80,7 @@ const Instruktur = {
     const isi = $('[data-isi]', el);
     UI.loading(isi, 3);
     let rows;
-    try { rows = await Kelola.daftarPel(true); } catch (e) { return UI.galat(isi, e, () => this.riwayat(el)); }
+    try { rows = await Kelola.daftarPel(); } catch (e) { return UI.galat(isi, e, () => this.riwayat(el)); }
     if (!rows.length) { isi.innerHTML = Kelola.tanpaPelatihan(); return; }
     isi.innerHTML = '<div class="grid g3"><div class="card stat"><span class="l">Total pelatihan</span><span class="v">' + rows.length + '</span></div>' +
       '<div class="card stat"><span class="l">Selesai</span><span class="v">' + rows.filter(p => p.status === 'selesai').length + '</span></div>' +
@@ -93,12 +95,13 @@ const Instruktur = {
     const box = $('[data-d]', m.el);
     UI.loading(box, 2);
     try {
-      const d = await API.call('pelatihan_detail', { id_pelatihan: id });
+      await API.ambil('pelatihan_detail', { id_pelatihan: id }, d => {
       const p = d.pelatihan;
       box.innerHTML = '<div class="h-md">' + esc(p.judul) + '</div><div class="t-sm muted">' + esc(UI.rentang(p)) + ' · ' + esc(p.jam) + ' · ' + esc(p.lokasi_atau_link) + '</div>' +
         '<div class="tbl-wrap mt20"><table class="tbl"><thead><tr><th>UMKM</th><th class="num">Hadir</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Tugas</th><th>Status</th></tr></thead><tbody>' +
         (d.peserta.length ? d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + ' · ' + esc(x.sektor) + '</div></td><td class="num">' + x.hadir + '/' + x.jumlah_hari + '</td><td class="num">' + UI.angka(x.pre) + '</td><td class="num">' + UI.angka(x.post) + '</td><td class="num">' + x.tugas_kumpul + '/' + x.tugas_total + '</td><td>' + UI.chipLulus(x.lulus) + '</td></tr>').join('')
           : '<tr><td colspan="6">' + UI.kosong('Belum ada peserta.', 'users') + '</td></tr>') + '</tbody></table></div>';
+      }, { el: box });
     } catch (e) { UI.galat(box, e); }
   }
 };
