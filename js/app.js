@@ -93,7 +93,7 @@ var App = {
     this._shell = '';
     const app = $('#app');
     let peran = localStorage.getItem('rl_peran') || 'peserta';
-    app.innerHTML = this.kerangkaAuth(APP_CONFIG.nama, 'Ruang belajar pelatihan UMKM ' + APP_CONFIG.lembaga,
+    app.innerHTML = this.kerangkaAuth(APP_CONFIG.nama, 'Pusat Pendampingan UMKM Cakung',
       '<div class="seg" data-peran>' + [['peserta', 'Peserta UMKM'], ['instruktur', 'Instruktur'], ['admin', 'Super Admin']].map(x => '<button type="button" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
       '<form class="col g20 mt20" data-form novalidate></form>');
     const form = $('[data-form]', app);
@@ -103,7 +103,7 @@ var App = {
       let f;
       if (peran === 'peserta') f =
         '<div class="field"><label for="m_hp">Nomor WhatsApp terdaftar</label><div class="input-ic">' + UI.ic('phone') + '<input class="input" id="m_hp" type="tel" inputmode="tel" autocomplete="tel" placeholder="08xxxxxxxxxx" value="' + esc(localStorage.getItem('rl_hp') || '') + '"></div></div>' +
-        '<div class="field"><div class="row between"><label>PIN 4 angka</label><button type="button" class="link" data-lihat>' + UI.ic('eye', 'sm') + '<span>Lihat PIN</span></button></div>' + this.kotakPin('pin') + '</div>';
+        '<div class="field"><div class="row between"><span class="lbl">PIN 4 angka</span><button type="button" class="link" data-lihat>' + UI.ic('eye', 'sm') + '<span>Lihat PIN</span></button></div>' + this.kotakPin('pin') + '</div>';
       else if (peran === 'instruktur') f =
         '<div class="field"><label for="m_nama">Nama instruktur</label><div class="input-ic">' + UI.ic('user') + '<input class="input" id="m_nama" autocomplete="name" placeholder="Nama lengkap sesuai data PPU" value="' + esc(localStorage.getItem('rl_nama') || '') + '"></div></div>' +
         '<div class="field"><label for="m_kode">Kode akses</label><div class="input-ic">' + UI.ic('key') + '<input class="input" id="m_kode" autocapitalize="characters" autocomplete="off" placeholder="mis. INS-2026"></div></div>';

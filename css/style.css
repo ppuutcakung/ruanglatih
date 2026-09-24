@@ -165,8 +165,9 @@ svg.ic.lg { width: 24px; height: 24px; }
 .form-grid .full { grid-column: 1 / -1; }
 .check { display: flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; font-size: 14px; }
 .check input { width: 22px; height: 22px; accent-color: var(--primary); flex-shrink: 0; }
-.pin-boxes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.pin-boxes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: 100%; max-width: 288px; margin: 0 auto; }
 .pin-boxes input {
+  width: 100%; min-width: 0; padding: 0;
   height: 56px; text-align: center; font-size: 22px; font-weight: 700; color: var(--primary);
   border-radius: var(--r-md); background: var(--blush-1); border: 1px solid var(--blush-3); outline: none; -webkit-text-security: disc;
 }
@@ -246,6 +247,8 @@ button.item:hover, a.item:hover { background: var(--blush-1); }
 .auth-hero h1 { text-align: center; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-top: 22px; }
 .auth-hero p { text-align: center; font-size: 13px; opacity: .85; }
 .auth-card { width: min(440px, calc(100% - 2 * var(--m))); margin: -84px auto 0; position: relative; }
+.auth-card .seg { overflow: visible; }
+.auth-card .seg button { padding: 6px 4px; font-size: 12.5px; min-width: 0; height: auto; min-height: 38px; white-space: normal; line-height: 1.2; }
 .auth-foot { margin-top: auto; padding: 28px 20px calc(20px + var(--safe-b)); text-align: center; font-size: 12px; color: var(--ink-3); }
 .auth-foot .row { justify-content: center; color: var(--ink-2); margin-bottom: 4px; }
 .auth-foot svg { color: var(--ok); }
