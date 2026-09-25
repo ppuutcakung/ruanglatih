@@ -41,7 +41,7 @@ Urutan wajib: **Backend dulu → salin URL `/exec` → isi `js/config.js` → ba
 
 **Opsional — data uji coba:** pilih fungsi **isiDataContoh** → ▶ Jalankan. Akan dibuat:
 - Instruktur: nama **Bagas Wicaksono**, kode **INS-2026**
-- 4 peserta: HP **081234560001** s.d. **081234560004**, PIN **1234** (wajib ganti saat masuk)
+- 4 peserta, mis. Nama UMKM **Dapur Berkah Bu Ani**, PIN **1234** (wajib ganti saat masuk)
 - 1 pelatihan 2 hari dengan 5 soal dan 1 tugas
 
 Hapus baris data contoh di spreadsheet sebelum dipakai sungguhan.

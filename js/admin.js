@@ -411,7 +411,7 @@ const Admin = {
     UI.form({
       title: ubah ? 'Ubah Data UMKM' : 'Tambah UMKM Baru', wide: true, submit: opt.submit || (ubah ? 'Simpan Perubahan' : 'Simpan'),
       fields: [
-        { name: 'nama_umkm', label: 'Nama UMKM / Usaha', value: u.nama_umkm, full: true, placeholder: 'mis. Dapur Bunda Lia' },
+        { name: 'nama_umkm', label: 'Nama UMKM / Usaha', value: u.nama_umkm, full: true, placeholder: 'mis. Dapur Bunda Lia', hint: 'Dipakai peserta untuk masuk aplikasi, jadi harus berbeda dari UMKM lain.' },
         { name: 'nama_pemilik', label: 'Nama Peserta', value: u.nama_pemilik, placeholder: 'Pemilik / perwakilan yang ikut pelatihan' },
         { name: 'gender', label: 'Gender', type: 'seg', value: u.gender || '', options: [['Laki-laki', 'Laki-laki'], ['Perempuan', 'Perempuan']] },
         { name: 'no_hp', label: 'Nomor WhatsApp', type: 'tel', value: u.no_hp, placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel" autocomplete="off"' },
@@ -440,7 +440,7 @@ const Admin = {
 
   /** Tampilkan PIN peserta + tombol kirim via WhatsApp. */
   tampilPin(u, pin, judul) {
-    const pesan = 'Halo ' + u.nama_pemilik + ', akun RuangLatih ' + u.nama_umkm + ' siap dipakai.\nMasuk: ' + location.origin + location.pathname + '\nNomor WhatsApp: ' + u.no_hp + '\nPIN: ' + pin + '\nAnda akan diminta mengganti PIN saat pertama masuk.';
+    const pesan = 'Halo ' + u.nama_pemilik + ', akun RuangLatih ' + u.nama_umkm + ' siap dipakai.\nMasuk: ' + location.origin + location.pathname + '\nPilih tab Peserta UMKM\nNama UMKM: ' + u.nama_umkm + '\nPIN: ' + pin + '\nAnda akan diminta mengganti PIN saat pertama masuk.';
     UI.modal({
       title: judul || 'PIN Peserta',
       body: '<div class="center col g8"><div class="t-sm muted">' + esc(u.nama_umkm) + ' · ' + esc(u.no_hp) + '</div><div style="font-size:44px;font-weight:700;letter-spacing:.3em;color:var(--primary)">' + esc(pin) + '</div>' +
@@ -946,10 +946,13 @@ const Admin = {
   aksesPeserta(el, isi) {
     let rows = [], q = '', f = '', hal = 1, lihat = {};
     const per = 20;
+    const kunci = n => String(n || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const gambar = () => {
+      const jml = {};
+      rows.forEach(u => { const k = kunci(u.nama_umkm); jml[k] = (jml[k] || 0) + 1; });
       const t = rows.filter(u => (!f || (f === 'awal' ? u.wajib_ganti_pin === 'ya' : u.status_akun === f)) && (!q || (u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp).toLowerCase().indexOf(q) >= 0));
-      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>No. WhatsApp (login)</th><th>PIN</th><th>Status akun</th><th>Aksi</th></tr></thead><tbody>' +
-        t.slice((hal - 1) * per, hal * per).map(u => '<tr><td><div class="semi">' + esc(u.nama_umkm) + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + '</div></td><td>' + esc(u.sektor) + '</td><td>' + esc(u.no_hp) + '</td>' +
+      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nama UMKM (untuk masuk)</th><th>Sektor</th><th>No. WhatsApp</th><th>PIN</th><th>Status akun</th><th>Aksi</th></tr></thead><tbody>' +
+        t.slice((hal - 1) * per, hal * per).map(u => '<tr><td><div class="semi">' + esc(u.nama_umkm) + (jml[kunci(u.nama_umkm)] > 1 ? ' <span class="chip bad sm" title="Nama sama dengan UMKM lain. Ubah di menu Peserta agar login tidak tertukar.">nama ganda</span>' : '') + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + '</div></td><td>' + esc(u.sektor) + '</td><td>' + esc(u.no_hp) + '</td>' +
           '<td><button class="chip line num" data-aksi="lihatPin" data-id="' + esc(u.id_umkm) + '" title="Tampilkan/sembunyikan">' + UI.ic(lihat[u.id_umkm] ? 'eyeOff' : 'eye', 'sm') + (lihat[u.id_umkm] ? esc(u.pin) : '••••') + '</button>' + (u.wajib_ganti_pin === 'ya' ? ' <span class="chip warn sm" title="Belum mengganti PIN awal">awal</span>' : '') + '</td>' +
           '<td>' + (u.status_akun === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip bad sm">Nonaktif</span>') + '</td>' +
           '<td><div class="row g4"><button class="btn icon sm secondary" data-aksi="kirim" data-id="' + esc(u.id_umkm) + '" title="Kirim info akses via WhatsApp">' + UI.ic('message', 'sm') + '</button>' +
@@ -962,7 +965,7 @@ const Admin = {
         isi.innerHTML = '<div class="grid g4" data-stat></div><div class="card mt20"><div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-f>' +
           [['', 'Semua'], ['aktif', 'Aktif'], ['nonaktif', 'Nonaktif'], ['awal', 'Belum ganti PIN']].map(x => '<button data-v="' + x[0] + '" class="' + (f === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
           '<div class="input-ic" style="min-width:240px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari UMKM, peserta, HP…" data-q></div></div><div data-list></div>' +
-          '<div class="hint mt8">Peserta masuk dengan nomor WhatsApp + PIN 4 angka. Reset PIN juga membuka kunci akun yang terkunci karena 5 kali salah PIN.</div></div>';
+          '<div class="hint mt8">Peserta masuk dengan <b>Nama UMKM/Usaha</b> + PIN 4 angka. Reset PIN juga membuka kunci akun yang terkunci karena 5 kali salah PIN.</div></div>';
         $('[data-f]', isi).onclick = e => { const b = e.target.closest('button'); if (!b) return; f = b.dataset.v; hal = 1; $$('[data-f] button', isi).forEach(x => x.classList.toggle('on', x === b)); gambar(); };
         let tunda;
         $('[data-q]', isi).oninput = e => { clearTimeout(tunda); tunda = setTimeout(() => { q = e.target.value.toLowerCase(); hal = 1; gambar(); }, 150); };

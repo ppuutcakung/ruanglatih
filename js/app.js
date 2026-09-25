@@ -100,7 +100,7 @@ var App = {
       $$('[data-peran] button', app).forEach(b => b.classList.toggle('on', b.dataset.v === peran));
       let f;
       if (peran === 'peserta') f =
-        '<div class="field"><label for="m_hp">Nomor WhatsApp terdaftar</label><div class="input-ic">' + UI.ic('phone') + '<input class="input" id="m_hp" type="tel" inputmode="tel" autocomplete="tel" placeholder="08xxxxxxxxxx" value="' + esc(localStorage.getItem('rl_hp') || '') + '"></div></div>' +
+        '<div class="field"><label for="m_umkm">Nama UMKM / Usaha</label><div class="input-ic">' + UI.ic('store') + '<input class="input" id="m_umkm" autocomplete="username" autocapitalize="words" spellcheck="false" placeholder="mis. Dapur Berkah Bu Ani" value="' + esc(localStorage.getItem('rl_umkm') || '') + '"></div><div class="hint">Tulis sesuai nama usaha yang didaftarkan di PPU. Huruf besar/kecil tidak berpengaruh.</div></div>' +
         '<div class="field"><div class="row between"><span class="lbl">PIN 4 angka</span><button type="button" class="link" data-lihat>' + UI.ic('eye', 'sm') + '<span>Lihat PIN</span></button></div>' + this.kotakPin('pin') + '</div>';
       else if (peran === 'instruktur') f =
         '<div class="field"><label for="m_nama">Nama instruktur</label><div class="input-ic">' + UI.ic('user') + '<input class="input" id="m_nama" autocomplete="name" placeholder="Nama lengkap sesuai data PPU" value="' + esc(localStorage.getItem('rl_nama') || '') + '"></div></div>' +
@@ -110,7 +110,7 @@ var App = {
         '<div class="field"><label for="m_pw">Kata sandi</label><div class="input-ic">' + UI.ic('lock') + '<input class="input" id="m_pw" type="password" autocomplete="current-password"></div></div>';
       form.innerHTML = f + '<div class="err" data-err' + (pesan ? '' : ' hidden') + '>' + esc(pesan || '') + '</div>' +
         '<button class="btn primary block" type="submit" data-masuk style="height:50px">Masuk' + UI.ic('chevR', 'sm') + '</button>' +
-        (peran === 'peserta' ? '<a class="btn ghost block" href="' + this.linkWA('Halo Admin PPU, saya lupa PIN / belum punya akun RuangLatih. Nama UMKM: ') + '" target="_blank" rel="noopener">' + UI.ic('message', 'sm') + 'Lupa PIN? Hubungi Admin</a>' : '');
+        (peran === 'peserta' ? '<a class="btn ghost block" href="' + this.linkWA('Halo Admin PPU, saya lupa PIN / nama login RuangLatih. Nama UMKM: ') + '" target="_blank" rel="noopener">' + UI.ic('message', 'sm') + 'Lupa PIN? Hubungi Admin</a>' : '');
       pesan = '';
       if (peran === 'peserta') {
         pin = this.pasangPin($('[data-pin]', form));
@@ -127,11 +127,11 @@ var App = {
       err.hidden = true;
       let data;
       if (peran === 'peserta') {
-        const hp = $('#m_hp').value.trim(), p = pin.nilai();
-        if (!hp) { err.textContent = 'Isi nomor WhatsApp Anda.'; err.hidden = false; return; }
+        const nm = $('#m_umkm').value.trim().replace(/\s+/g, ' '), p = pin.nilai();
+        if (!nm) { err.textContent = 'Isi nama UMKM / usaha Anda.'; err.hidden = false; return; }
         if (!/^\d{4}$/.test(p)) { err.textContent = 'Isi PIN 4 angka.'; err.hidden = false; return; }
-        data = { peran: 'peserta', no_hp: hp, pin: p };
-        localStorage.setItem('rl_hp', hp);
+        data = { peran: 'peserta', nama_umkm: nm, pin: p };
+        localStorage.setItem('rl_umkm', nm);
       } else if (peran === 'instruktur') {
         data = { peran: 'instruktur', nama: $('#m_nama').value.trim(), kode: $('#m_kode').value.trim() };
         localStorage.setItem('rl_nama', data.nama);
@@ -261,7 +261,7 @@ var App = {
       title: 'Bantuan & Dokumentasi', wide: true,
       body: '<div class="col g20 t-sm" style="font-size:14px;line-height:1.7">' + (admin
         ? '<div><b>Alur satu pelatihan</b><br>1) Pelatihan → Buat Pelatihan (pilih 1 atau 2 hari). 2) Daftarkan UMKM ke pelatihan. 3) Instruktur mengunggah materi, soal, dan tugas. 4) Saat hari-H buka Absensi dan Pre-test dari Dashboard atau detail pelatihan. 5) Tutup dengan Post-test, Tugas, lalu Evaluasi. 6) Sertifikat → Terbitkan untuk peserta yang lulus. 7) Laporan Rekap → unduh Excel/PDF.</div>' +
-          '<div><b>Akun peserta</b><br>Peserta masuk memakai nomor WhatsApp + PIN 4 angka dan wajib mengganti PIN awal. Bila lupa PIN atau terkunci (5 kali salah), buka Peserta → tombol kunci untuk reset PIN, lalu kirim lewat WhatsApp.</div>' +
+          '<div><b>Akun peserta</b><br>Peserta masuk memakai <b>Nama UMKM/Usaha</b> + PIN 4 angka dan wajib mengganti PIN awal. Nama UMKM harus unik. Bila lupa PIN atau terkunci (5 kali salah), buka Peserta → tombol kunci untuk reset PIN, lalu kirim lewat WhatsApp.</div>' +
           '<div><b>Template</b><br>Sertifikat: Google Slides/PPTX 1 halaman dengan penanda {{nama_umkm}} {{nama_pemilik}} {{judul_pelatihan}} {{tanggal_pelatihan}} {{no_sertifikat}}. Laporan: Google Sheets dengan penanda {{tabel}} (atur di Pengaturan).</div>'
         : '<div><b>Tugas instruktur</b><br>1) Pilih pelatihan di pojok kanan atas setiap halaman. 2) Bank Materi → unggah PDF (maks 50 MB, bisa beberapa sekaligus). 3) Pre/Post Test → susun soal pilihan ganda A–E dan kunci jawaban. 4) Periksa Tugas → lihat berkas peserta, beri skor 0–100 dan catatan. 5) Rekap Nilai → pantau kenaikan pre ke post.</div>' +
           '<div><b>Catatan</b><br>Pembukaan absensi, tes, tugas, dan evaluasi diatur oleh admin PPU. Hasil evaluasi kepuasan hanya dapat dilihat admin.</div>') +

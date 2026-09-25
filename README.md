@@ -10,7 +10,7 @@ Ruang belajar pelatihan UMKM untuk **Pusat Pendampingan UMKM Sentra Cakung** —
 
 | Peran | Masuk dengan | Bisa |
 |---|---|---|
-| Peserta UMKM | No. WhatsApp + PIN 4 angka (wajib ganti saat pertama) | Absen, buka materi, pre/post-test, kumpul tugas, isi evaluasi, unduh sertifikat |
+| Peserta UMKM | Nama UMKM/Usaha + PIN 4 angka (wajib ganti saat pertama) | Absen, buka materi, pre/post-test, kumpul tugas, isi evaluasi, unduh sertifikat |
 | Instruktur | Nama + kode akses | Kelola materi, soal, tugas & nilai untuk pelatihan miliknya |
 | Super Admin | Username + kata sandi | Semua fitur, termasuk buka/tutup aktivitas, evaluasi, sertifikat, laporan |
 
