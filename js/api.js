@@ -23,7 +23,7 @@ const Sesi = {
 const BACA = {
   pelatihan_list: 'pel reg', pelatihan_detail: 'pel reg absen tes tugas eval umkm sert', materi_list: 'materi', soal_list: 'soal tes',
   tugas_list: 'tugas umkm', nilai_rekap: 'pel reg absen tes tugas umkm', dasbor_instruktur: 'pel reg absen tes tugas soal materi',
-  dasbor_admin: '*', draft_list: 'draft', umkm_list: 'umkm reg', instruktur_list: 'ins pel', eval_form: 'eval', eval_hasil: 'eval reg pel', pengaturan_get: 'set',
+  dasbor_admin: '*', draft_list: 'draft', umkm_list: 'umkm reg', umkm_riwayat: '*', instruktur_list: 'ins pel', eval_form: 'eval', eval_hasil: 'eval reg pel', pengaturan_get: 'set',
   admin_list: 'admin', log_list: '*', sert_status: 'sert reg absen tes tugas pel umkm', laporan_data: '*',
   p_beranda: 'pel reg', p_pelatihan: 'pel reg absen tes', p_ruang: 'pel absen tes tugas eval materi soal', p_materi: 'materi reg',
   p_riwayat: '*', p_sertifikat: '*'

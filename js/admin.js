@@ -35,7 +35,7 @@ const Admin = {
     sertifikat: el => Admin.sertifikat(el),
     laporan: el => Admin.laporan(el),
     log: el => Admin.log(el),
-    akses: el => Admin.akses(el),
+    akses: (el, a) => Admin.akses(el, a[0]),
     pengaturan: el => Admin.pengaturan(el),
     cari: (el, a) => Admin.cari(el, decodeURIComponent(a[0] || ''))
   },
@@ -392,20 +392,21 @@ const Admin = {
     gambar();
   },
 
-  /**
-   * Form singkat UMKM baru (dipakai di "Daftarkan UMKM").
-   * Server tetap memeriksa nomor WA ganda; PIN awal dibuat otomatis.
-   */
-  formUmkmBaru(sektorAwal, selesai) {
+  /** Form UMKM (tambah/ubah). Dipakai di tab Peserta dan di "Daftarkan UMKM". */
+  formUmkm(u, opt, selesai) {
+    opt = opt || {};
+    const ubah = !!(u && u.id_umkm);
+    u = u || {};
     UI.form({
-      title: 'Tambah UMKM Baru', submit: 'Simpan & Pilih',
+      title: ubah ? 'Ubah Data UMKM' : 'Tambah UMKM Baru', wide: true, submit: opt.submit || (ubah ? 'Simpan Perubahan' : 'Simpan'),
       fields: [
-        { name: 'nama_umkm', label: 'Nama UMKM / Usaha', full: true, placeholder: 'mis. Dapur Bunda Lia' },
-        { name: 'nama_pemilik', label: 'Nama Peserta', full: true, placeholder: 'Nama pemilik / perwakilan yang ikut pelatihan' },
-        { name: 'gender', label: 'Gender', type: 'seg', value: '', options: [['Laki-laki', 'Laki-laki'], ['Perempuan', 'Perempuan']] },
-        { name: 'no_hp', label: 'Nomor WhatsApp', type: 'tel', placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel" autocomplete="off"' },
-        { name: 'alamat', label: 'Alamat Singkat', full: true, placeholder: 'mis. Jl. Cakung Raya No. 12, Cakung Barat' },
-        { name: 'sektor', label: 'Sektor Usaha', type: 'seg', value: sektorAwal || '', options: SEKTOR.map(x => [x, x]), full: true }
+        { name: 'nama_umkm', label: 'Nama UMKM / Usaha', value: u.nama_umkm, full: true, placeholder: 'mis. Dapur Bunda Lia' },
+        { name: 'nama_pemilik', label: 'Nama Peserta', value: u.nama_pemilik, placeholder: 'Pemilik / perwakilan yang ikut pelatihan' },
+        { name: 'gender', label: 'Gender', type: 'seg', value: u.gender || '', options: [['Laki-laki', 'Laki-laki'], ['Perempuan', 'Perempuan']] },
+        { name: 'no_hp', label: 'Nomor WhatsApp', type: 'tel', value: u.no_hp, placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel" autocomplete="off"' },
+        { name: 'spesialisasi', label: 'Produk / spesialisasi (opsional)', value: u.spesialisasi, placeholder: 'mis. Keripik singkong' },
+        { name: 'sektor', label: 'Sektor Usaha', type: 'seg', value: u.sektor || opt.sektorAwal || '', options: SEKTOR.map(x => [x, x]), full: true },
+        { name: 'alamat', label: 'Alamat Singkat', value: u.alamat, full: true, placeholder: 'mis. Jl. Cakung Raya No. 12, Cakung Barat' }
       ],
       onSubmit: async v => {
         if (!v.nama_umkm) throw new Error('Nama UMKM / usaha wajib diisi.');
@@ -413,81 +414,144 @@ const Admin = {
         if (!v.gender) throw new Error('Pilih gender peserta.');
         if (!/^(\+?62|0)8\d{7,12}$/.test(v.no_hp.replace(/[\s-]/g, ''))) throw new Error('Nomor WhatsApp tidak valid (contoh 081234567890).');
         if (!v.sektor) throw new Error('Pilih sektor usaha.');
-        const r = await API.call('umkm_simpan', Object.assign({ gender_wajib: true }, v));
+        const r = await API.call('umkm_simpan', Object.assign({ id_umkm: u.id_umkm, gender_wajib: true }, v));
         const hp = v.no_hp.replace(/\D/g, '').replace(/^62/, '0');
-        const u = Object.assign({ id_umkm: r.id_umkm, pin: r.pin, status_akun: 'aktif', wajib_ganti_pin: 'ya', jumlah_pelatihan: 0, spesialisasi: '' }, v, { no_hp: hp });
-        UI.toast(v.nama_umkm + ' ditambahkan · PIN awal ' + r.pin);
-        selesai && selesai(u);
+        const hasil = Object.assign({}, u, v, { no_hp: hp }, ubah ? {} : { id_umkm: r.id_umkm, pin: r.pin, status_akun: 'aktif', wajib_ganti_pin: 'ya', jumlah_pelatihan: 0 });
+        UI.toast(ubah ? 'Data ' + v.nama_umkm + ' diperbarui.' : v.nama_umkm + ' ditambahkan · PIN awal ' + r.pin);
+        selesai && selesai(hasil, r);
       }
+    });
+  },
+  formUmkmBaru(sektorAwal, selesai) { this.formUmkm(null, { sektorAwal: sektorAwal, submit: 'Simpan & Pilih' }, selesai); },
+
+  waNomor(hp) { hp = String(hp || '').replace(/\D/g, ''); return hp.indexOf('0') === 0 ? '62' + hp.slice(1) : hp; },
+  linkWaKe(hp, teks) { return 'https://wa.me/' + this.waNomor(hp) + (teks ? '?text=' + encodeURIComponent(teks) : ''); },
+
+  /** Tampilkan PIN peserta + tombol kirim via WhatsApp. */
+  tampilPin(u, pin, judul) {
+    const pesan = 'Halo ' + u.nama_pemilik + ', akun RuangLatih ' + u.nama_umkm + ' siap dipakai.\nMasuk: ' + location.origin + location.pathname + '\nNomor WhatsApp: ' + u.no_hp + '\nPIN: ' + pin + '\nAnda akan diminta mengganti PIN saat pertama masuk.';
+    UI.modal({
+      title: judul || 'PIN Peserta',
+      body: '<div class="center col g8"><div class="t-sm muted">' + esc(u.nama_umkm) + ' · ' + esc(u.no_hp) + '</div><div style="font-size:44px;font-weight:700;letter-spacing:.3em;color:var(--primary)">' + esc(pin) + '</div>' +
+        '<div class="hint">' + (u.wajib_ganti_pin === 'ya' ? 'Peserta wajib mengganti PIN ini saat pertama masuk.' : 'PIN yang sedang dipakai peserta.') + '</div></div>',
+      foot: '<button class="btn outline" data-salin>' + UI.ic('copy', 'sm') + 'Salin</button><a class="btn primary" target="_blank" rel="noopener" href="' + this.linkWaKe(u.no_hp, pesan) + '">' + UI.ic('message', 'sm') + 'Kirim via WhatsApp</a>',
+      onOpen: m => { $('[data-salin]', m.el).onclick = () => UI.salin(pin); }
+    });
+  },
+  /** Tampilkan kode akses instruktur + tombol kirim via WhatsApp. */
+  tampilKode(i, kode, judul) {
+    const pesan = 'Halo ' + i.nama + ', berikut akses Portal Instruktur RuangLatih.\nMasuk: ' + location.origin + location.pathname + '\nPilih tab Instruktur\nNama: ' + i.nama + '\nKode akses: ' + kode;
+    UI.modal({
+      title: judul || 'Kode Akses Instruktur',
+      body: '<div class="center col g8"><div class="t-sm muted">' + esc(i.nama) + (i.institusi ? ' · ' + esc(i.institusi) : '') + '</div><div style="font-size:36px;font-weight:700;letter-spacing:.12em;color:var(--primary)">' + esc(kode) + '</div>' +
+        '<div class="hint">Instruktur masuk dengan nama lengkap persis seperti di atas + kode ini.</div></div>',
+      foot: '<button class="btn outline" data-salin>' + UI.ic('copy', 'sm') + 'Salin</button>' + (i.no_hp ? '<a class="btn primary" target="_blank" rel="noopener" href="' + this.linkWaKe(i.no_hp, pesan) + '">' + UI.ic('message', 'sm') + 'Kirim via WhatsApp</a>' : ''),
+      onOpen: m => { $('[data-salin]', m.el).onclick = () => UI.salin(kode); }
     });
   },
 
   // ===========================================================
-  // INSTRUKTUR
+  // INSTRUKTUR — database pengajar / narasumber
   // ===========================================================
   async instruktur(el) {
-    el.innerHTML = Kelola.kepala('Instruktur', 'Masuk dengan nama + kode akses', '<button class="btn primary sm" data-aksi="baru">' + UI.ic('plus', 'sm') + 'Tambah Instruktur</button>') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Instruktur', 'Database pengajar & narasumber pelatihan', '<button class="btn primary sm" data-aksi="baru">' + UI.ic('plus', 'sm') + 'Tambah Instruktur</button>') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
-    let rows = [];
-    const muat = async () => {
-      UI.loading(isi, 2);
-      try { await API.ambil('instruktur_list', {}, x => { rows = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
-    };
+    let rows = [], q = '';
     const gambar = () => {
-      {
-        isi.innerHTML = '<div class="card">' + (rows.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nama</th><th>Kode akses</th><th>Tema diajar</th><th class="num">Pelatihan</th><th>Status</th><th></th></tr></thead><tbody>' +
-          rows.map(i => '<tr><td class="semi">' + esc(i.nama) + '</td><td><button class="chip line" data-aksi="salin" data-k="' + esc(i.kode_akses) + '">' + UI.ic('key', 'sm') + esc(i.kode_akses) + '</button></td><td class="muted">' + esc(i.tema_diajar || '-') + '</td><td class="num">' + i.jumlah_pelatihan + '</td>' +
-            '<td>' + (i.status === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip info sm">Nonaktif</span>') + '</td><td><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(i.id_instruktur) + '">' + UI.ic('edit', 'sm') + '</button></td></tr>').join('') + '</tbody></table></div>'
-          : UI.kosong('Belum ada instruktur.', 'user')) + '</div>';
+      if (!$('[data-list]', isi)) {
+        isi.innerHTML = '<div class="grid g4" data-stat></div><div class="card mt20"><div class="row between wrap" style="margin-bottom:14px"><div class="h-sm">Daftar Instruktur</div>' +
+          '<div class="input-ic" style="min-width:260px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari nama, institusi, atau nomor HP…" data-q></div></div><div data-list></div></div>';
+        $('[data-q]', isi).oninput = e => { q = e.target.value.toLowerCase(); gambar(); };
       }
-    };
-    const form = i => {
-      i = i || { status: 'aktif' };
-      UI.form({
-        title: i.id_instruktur ? 'Ubah Instruktur' : 'Tambah Instruktur', submit: 'Simpan',
-        fields: [
-          { name: 'nama', label: 'Nama lengkap (dipakai saat masuk)', value: i.nama, full: true },
-          { name: 'kode_akses', label: 'Kode akses', value: i.kode_akses, hint: 'Kosongkan untuk dibuat otomatis (INS-xxxx).' },
-          { name: 'status', label: 'Status', type: 'select', value: i.status, options: [['aktif', 'Aktif'], ['nonaktif', 'Nonaktif']] },
-          { name: 'tema_diajar', label: 'Tema yang diajar', value: i.tema_diajar, full: true, placeholder: 'mis. Foto produk, pemasaran digital' }
-        ],
-        onSubmit: async v => { const r = await API.call('instruktur_simpan', Object.assign({ id_instruktur: i.id_instruktur }, v)); UI.toast(r.message); muat(); }
-      });
-    };
-    UI.klik(el, { baru: () => form(), ubah: b => form(rows.find(i => i.id_instruktur === b.dataset.id)), salin: b => UI.salin(b.dataset.k) });
-    muat();
-  },
-
-  // ===========================================================
-  // PESERTA / DATA UMKM
-  // ===========================================================
-  waNomor(hp) { hp = String(hp || '').replace(/\D/g, ''); return hp.indexOf('0') === 0 ? '62' + hp.slice(1) : hp; },
-
-  async peserta(el) {
-    el.innerHTML = Kelola.kepala('Peserta UMKM', 'Akun masuk: nomor WhatsApp + PIN 4 angka', '<button class="btn outline sm" data-aksi="impor">' + UI.ic('upload', 'sm') + 'Impor</button><button class="btn primary sm" data-aksi="baru">' + UI.ic('plus', 'sm') + 'Tambah UMKM</button>') + '<div data-isi></div>';
-    const isi = $('[data-isi]', el);
-    let rows = [], q = '', sek = '', hal = 1, lihat = {};
-    const per = 20;
-    const gambar = () => {
-      const t = rows.filter(u => (!sek || u.sektor === sek) && (!q || (u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp + ' ' + u.spesialisasi).toLowerCase().indexOf(q) >= 0));
-      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>No. WhatsApp</th><th>PIN</th><th class="num">Pelatihan</th><th>Status</th><th></th></tr></thead><tbody>' +
-        t.slice((hal - 1) * per, hal * per).map(u => '<tr><td><div class="semi">' + esc(u.nama_umkm) + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + (u.gender ? ' (' + (u.gender === 'Perempuan' ? 'P' : 'L') + ')' : '') + (u.spesialisasi ? ' · ' + esc(u.spesialisasi) : '') + '</div></td><td>' + esc(u.sektor) + '</td><td>' + esc(u.no_hp) + '</td>' +
-          '<td><button class="chip line num" data-aksi="lihatPin" data-id="' + esc(u.id_umkm) + '">' + (lihat[u.id_umkm] ? esc(u.pin) : '••••') + '</button>' + (u.wajib_ganti_pin === 'ya' ? ' <span class="chip warn sm" title="Wajib ganti PIN saat masuk">awal</span>' : '') + '</td>' +
-          '<td class="num">' + u.jumlah_pelatihan + '</td><td>' + (u.status_akun === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip bad sm">Nonaktif</span>') + '</td>' +
-          '<td><div class="row g4"><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(u.id_umkm) + '" title="Ubah">' + UI.ic('edit', 'sm') + '</button><button class="btn icon sm secondary" data-aksi="reset" data-id="' + esc(u.id_umkm) + '" title="Reset PIN">' + UI.ic('key', 'sm') + '</button>' +
-          '<button class="btn icon sm ' + (u.status_akun === 'aktif' ? 'danger' : 'ok') + '" data-aksi="status" data-id="' + esc(u.id_umkm) + '" title="' + (u.status_akun === 'aktif' ? 'Nonaktifkan' : 'Aktifkan') + '">' + UI.ic(u.status_akun === 'aktif' ? 'lock' : 'check', 'sm') + '</button></div></td></tr>').join('') +
-        '</tbody></table></div>' + UI.halaman(t.length, hal, per) : UI.kosong(rows.length ? 'Tidak ada UMKM yang cocok.' : 'Belum ada data UMKM. Tambah satu per satu atau impor dari Excel.', 'users');
+      const inst = new Set(rows.map(i => i.institusi).filter(Boolean)).size;
+      $('[data-stat]', isi).innerHTML = [['Total instruktur', rows.length, ''], ['Aktif', rows.filter(i => i.status === 'aktif').length, 'c-ok'], ['Institusi', inst, ''], ['Pelatihan diampu', rows.reduce((s, i) => s + i.jumlah_pelatihan, 0), 'c-primary']]
+        .map(x => '<div class="card stat"><span class="l">' + x[0] + '</span><span class="v ' + x[2] + '">' + x[1] + '</span></div>').join('');
+      const t = rows.filter(i => !q || (i.nama + ' ' + i.institusi + ' ' + i.no_hp).toLowerCase().indexOf(q) >= 0);
+      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nama</th><th>Institusi</th><th>Nomor HP</th><th class="num">Pelatihan</th><th>Status</th><th></th></tr></thead><tbody>' +
+        t.map(i => '<tr style="cursor:pointer" data-buka="' + esc(i.id_instruktur) + '"><td><div class="row g8"><div class="ic-tile sm solid" style="width:34px;height:34px;font-size:12px;font-weight:700">' + esc(UI.inisial(i.nama)) + '</div><span class="semi">' + esc(i.nama) + '</span></div></td>' +
+          '<td>' + (i.institusi ? esc(i.institusi) : '<span class="faint">–</span>') + '</td><td>' + (i.no_hp ? '<a href="' + this.linkWaKe(i.no_hp) + '" target="_blank" rel="noopener" data-stop>' + esc(i.no_hp) + '</a>' : '<span class="faint">–</span>') + '</td>' +
+          '<td class="num">' + i.jumlah_pelatihan + '</td><td>' + (i.status === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip info sm">Nonaktif</span>') + '</td>' +
+          '<td><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(i.id_instruktur) + '" title="Ubah data">' + UI.ic('edit', 'sm') + '</button></td></tr>').join('') + '</tbody></table></div><div class="hint mt8">Klik baris untuk melihat rincian & riwayat mengajar. Kode akses dan status akun diatur di menu Manajemen Akses.</div>'
+        : UI.kosong(rows.length ? 'Tidak ada instruktur yang cocok.' : 'Belum ada instruktur. Klik "Tambah Instruktur".', 'user');
     };
     const muat = async () => {
       if (!$('[data-list]', isi)) UI.loading(isi, 2);
-      try { await API.ambil('umkm_list', {}, x => { rows = x; pasang(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+      try { await API.ambil('instruktur_list', {}, x => { rows = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+    };
+    const form = i => {
+      i = i || {};
+      UI.form({
+        title: i.id_instruktur ? 'Ubah Data Instruktur' : 'Tambah Instruktur', submit: 'Simpan',
+        intro: i.id_instruktur ? '' : '<div class="card well tight t-sm" style="margin-bottom:16px">Kode akses untuk masuk dibuat otomatis setelah disimpan dan bisa langsung dikirim via WhatsApp.</div>',
+        fields: [
+          { name: 'nama', label: 'Nama lengkap (dipakai saat masuk)', value: i.nama, full: true },
+          { name: 'institusi', label: 'Institusi', value: i.institusi, full: true, placeholder: 'mis. Politeknik Kreatif Jakarta, Dinas KUKM, praktisi mandiri' },
+          { name: 'no_hp', label: 'Nomor HP / WhatsApp', type: 'tel', value: i.no_hp, full: true, placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel"' }
+        ],
+        onSubmit: async v => {
+          if (v.no_hp && !/^(\+?62|0)8\d{7,12}$/.test(v.no_hp.replace(/[\s-]/g, ''))) throw new Error('Nomor HP tidak valid (contoh 081234567890).');
+          const r = await API.call('instruktur_simpan', Object.assign({ id_instruktur: i.id_instruktur }, v));
+          if (i.id_instruktur) { Object.assign(i, v); gambar(); UI.toast(r.message); }
+          else { rows.push(Object.assign({ id_instruktur: r.id_instruktur, kode_akses: r.kode_akses, status: 'aktif', jumlah_pelatihan: 0 }, v)); gambar(); this.tampilKode(v, r.kode_akses, 'Instruktur ditambahkan'); }
+        }
+      });
+    };
+    UI.klik(el, { baru: () => form(), ubah: b => form(rows.find(i => i.id_instruktur === b.dataset.id)) });
+    isi.addEventListener('click', e => {
+      if (e.target.closest('[data-aksi],[data-stop]')) return;
+      const r = e.target.closest('[data-buka]');
+      if (r) this.detailInstruktur(rows.find(i => i.id_instruktur === r.dataset.buka), () => form(rows.find(i => i.id_instruktur === r.dataset.buka)));
+    });
+    muat();
+  },
+
+  async detailInstruktur(i, ubah) {
+    if (!i) return;
+    const m = UI.modal({
+      title: 'Rincian Instruktur', wide: true,
+      body: '<div class="row" style="margin-bottom:16px"><div class="ic-tile solid" style="width:52px;height:52px;font-weight:700">' + esc(UI.inisial(i.nama)) + '</div><div class="grow"><div class="h-md">' + esc(i.nama) + '</div><div class="t-sm muted">' + esc(i.institusi || 'Institusi belum diisi') + '</div></div>' +
+        (i.status === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip info sm">Nonaktif</span>') + '</div>' +
+        '<dl class="kv"><dt>Nomor HP</dt><dd>' + (i.no_hp ? '<a href="' + this.linkWaKe(i.no_hp) + '" target="_blank" rel="noopener">' + esc(i.no_hp) + ' (WhatsApp)</a>' : '–') + '</dd><dt>Pelatihan diampu</dt><dd>' + i.jumlah_pelatihan + '</dd><dt>Akses masuk</dt><dd><a href="#/akses/instruktur" data-tutup>Kelola di Manajemen Akses</a></dd></dl>' +
+        '<div class="h-sm mt20" style="margin-bottom:10px">Riwayat Mengajar</div><div data-pel></div>',
+      foot: '<button class="btn outline" data-tutup>Tutup</button><button class="btn primary" data-ubah>' + UI.ic('edit', 'sm') + 'Ubah Data</button>'
+    });
+    $('[data-ubah]', m.el).onclick = () => { m.close(); ubah(); };
+    const box = $('[data-pel]', m.el);
+    UI.loading(box, 1);
+    try {
+      const pel = (await Kelola.daftarPel()).filter(p => p.id_instruktur === i.id_instruktur);
+      box.innerHTML = pel.length ? '<div class="list">' + pel.map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" data-tutup style="color:inherit"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow"><div class="semi">' + esc(p.judul) + '</div><div class="meta"><span>' + esc(UI.rentang(p)) + ' (' + p.jumlah_hari + ' hari)</span><span>' + p.jumlah_peserta + ' peserta</span></div></div>' + UI.chipStatus(p.status) + '</a>').join('') + '</div>'
+        : UI.kosong('Belum pernah mengampu pelatihan.', 'cap');
+    } catch (e) { UI.galat(box, e); }
+  },
+
+  // ===========================================================
+  // PESERTA — database & rekap UMKM binaan
+  // ===========================================================
+  async peserta(el) {
+    el.innerHTML = Kelola.kepala('Peserta UMKM', 'Database UMKM binaan & rekap pelatihan yang diikuti', '<button class="btn outline sm" data-aksi="impor">' + UI.ic('upload', 'sm') + 'Impor</button><button class="btn primary sm" data-aksi="baru">' + UI.ic('plus', 'sm') + 'Tambah UMKM</button>') + '<div data-isi></div>';
+    const isi = $('[data-isi]', el);
+    let rows = [], q = '', sek = '', urut = 'nama', hal = 1;
+    const per = 20;
+    const gambar = () => {
+      const t = rows.filter(u => (!sek || u.sektor === sek) && (!q || (u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp + ' ' + u.spesialisasi + ' ' + u.alamat).toLowerCase().indexOf(q) >= 0))
+        .sort(urut === 'pelatihan' ? (a, b) => b.jumlah_pelatihan - a.jumlah_pelatihan || a.nama_umkm.localeCompare(b.nama_umkm) : (a, b) => a.nama_umkm.localeCompare(b.nama_umkm));
+      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>No. WhatsApp</th><th>Alamat</th><th class="num">Pelatihan diikuti</th><th></th></tr></thead><tbody>' +
+        t.slice((hal - 1) * per, hal * per).map(u => '<tr style="cursor:pointer" data-buka="' + esc(u.id_umkm) + '"><td><div class="semi">' + esc(u.nama_umkm) + (u.status_akun !== 'aktif' ? ' <span class="chip bad sm">Nonaktif</span>' : '') + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + (u.gender ? ' (' + (u.gender === 'Perempuan' ? 'P' : 'L') + ')' : '') + (u.spesialisasi ? ' · ' + esc(u.spesialisasi) : '') + '</div></td>' +
+          '<td>' + esc(u.sektor) + '</td><td>' + esc(u.no_hp) + '</td><td><div class="t-sm clamp1" style="max-width:220px">' + (u.alamat ? esc(u.alamat) : '<span class="faint">–</span>') + '</div></td>' +
+          '<td class="num"><span class="chip ' + (u.jumlah_pelatihan ? 'solid' : 'line') + ' sm">' + u.jumlah_pelatihan + ' pelatihan</span></td>' +
+          '<td><div class="row g4"><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(u.id_umkm) + '" title="Ubah data">' + UI.ic('edit', 'sm') + '</button>' + UI.ic('chevR', 'sm') + '</div></td></tr>').join('') +
+        '</tbody></table></div>' + UI.halaman(t.length, hal, per) + '<div class="hint mt8">Klik baris untuk melihat rincian pelatihan yang pernah diikuti. PIN & status akun diatur di menu Manajemen Akses.</div>'
+        : UI.kosong(rows.length ? 'Tidak ada UMKM yang cocok.' : 'Belum ada data UMKM. Tambah satu per satu atau impor dari Excel.', 'users');
     };
     const pasang = () => {
       if (!$('[data-list]', isi)) {
         isi.innerHTML = '<div class="grid g4" data-stat></div>' +
           '<div class="card mt20"><div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-s><button data-v="" class="on">Semua</button>' + SEKTOR.map(s => '<button data-v="' + s + '">' + s + '</button>').join('') + '</div>' +
-          '<div class="input-ic" style="min-width:240px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari UMKM, pemilik, HP…" data-q></div></div><div data-list></div></div>';
+          '<div class="row g8 wrap"><select class="select" style="height:42px;width:auto" data-urut><option value="nama">Urut: Nama A–Z</option><option value="pelatihan">Urut: Paling sering ikut</option></select>' +
+          '<div class="input-ic" style="min-width:240px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari UMKM, peserta, HP, alamat…" data-q></div></div></div><div data-list></div></div>';
         $('[data-s]', isi).onclick = e => { const b = e.target.closest('button'); if (!b) return; sek = b.dataset.v; hal = 1; $$('[data-s] button', isi).forEach(x => x.classList.toggle('on', x === b)); gambar(); };
+        $('[data-urut]', isi).onchange = e => { urut = e.target.value; hal = 1; gambar(); };
         let tunda;
         $('[data-q]', isi).oninput = e => { clearTimeout(tunda); tunda = setTimeout(() => { q = e.target.value.toLowerCase(); hal = 1; gambar(); }, 150); };
       }
@@ -496,54 +560,47 @@ const Admin = {
       $('[data-s] button[data-v=""]', isi).textContent = 'Semua (' + rows.length + ')';
       gambar();
     };
-    const tampilPin = (u, pin, judul) => {
-      const pesan = 'Halo ' + u.nama_pemilik + ', akun RuangLatih ' + u.nama_umkm + ' siap dipakai.\nMasuk: ' + location.origin + location.pathname + '\nNomor WhatsApp: ' + u.no_hp + '\nPIN: ' + pin + '\nAnda akan diminta mengganti PIN saat pertama masuk.';
-      UI.modal({
-        title: judul,
-        body: '<div class="center col g8"><div class="t-sm muted">' + esc(u.nama_umkm) + ' · ' + esc(u.no_hp) + '</div><div style="font-size:44px;font-weight:700;letter-spacing:.3em;color:var(--primary)">' + esc(pin) + '</div><div class="hint">Peserta wajib mengganti PIN ini saat pertama masuk.</div></div>',
-        foot: '<button class="btn outline" data-salin>' + UI.ic('copy', 'sm') + 'Salin</button><a class="btn primary" target="_blank" rel="noopener" href="https://wa.me/' + this.waNomor(u.no_hp) + '?text=' + encodeURIComponent(pesan) + '">' + UI.ic('message', 'sm') + 'Kirim via WhatsApp</a>',
-        onOpen: m => { $('[data-salin]', m.el).onclick = () => UI.salin(pin); }
-      });
-    };
-    const form = u => {
-      u = u || {};
-      UI.form({
-        title: u.id_umkm ? 'Ubah Data UMKM' : 'Tambah UMKM', wide: true, submit: 'Simpan',
-        fields: [
-          { name: 'nama_umkm', label: 'Nama UMKM / Usaha', value: u.nama_umkm }, { name: 'nama_pemilik', label: 'Nama peserta / pemilik', value: u.nama_pemilik },
-          { name: 'gender', label: 'Gender', type: 'seg', value: u.gender || '', options: [['Laki-laki', 'Laki-laki'], ['Perempuan', 'Perempuan']] },
-          { name: 'sektor', label: 'Sektor', type: 'select', value: u.sektor, options: SEKTOR }, { name: 'spesialisasi', label: 'Spesialisasi produk', value: u.spesialisasi, placeholder: 'mis. Sambal kemasan' },
-          { name: 'no_hp', label: 'Nomor WhatsApp', type: 'tel', value: u.no_hp, placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel"' },
-          { name: 'pin', label: u.id_umkm ? 'PIN' : 'PIN awal (opsional)', value: '', placeholder: u.id_umkm ? 'Gunakan tombol Reset PIN' : 'Kosongkan = acak 4 angka', attrs: 'inputmode="numeric" maxlength="4"' + (u.id_umkm ? ' disabled' : '') },
-          { name: 'alamat', label: 'Alamat', type: 'textarea', value: u.alamat }
-        ],
-        onSubmit: async v => {
-          const r = await API.call('umkm_simpan', Object.assign({ id_umkm: u.id_umkm }, v));
-          UI.toast(r.message); await muat();
-          if (r.pin) tampilPin(Object.assign({}, v, { no_hp: v.no_hp }), r.pin, 'UMKM ditambahkan');
-        }
-      });
+    const muat = async () => {
+      if (!$('[data-list]', isi)) UI.loading(isi, 2);
+      try { await API.ambil('umkm_list', {}, x => { rows = x; pasang(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
     };
     UI.klik(el, {
-      baru: () => form(),
-      ubah: b => form(rows.find(u => u.id_umkm === b.dataset.id)),
-      lihatPin: b => { lihat[b.dataset.id] = !lihat[b.dataset.id]; gambar(); },
+      baru: () => this.formUmkm(null, {}, (u, r) => { rows.push(u); pasang(); this.tampilPin(u, r.pin, 'UMKM ditambahkan'); }),
+      ubah: b => { const u = rows.find(x => x.id_umkm === b.dataset.id); this.formUmkm(u, {}, x => { Object.assign(u, x); pasang(); }); },
       hal: b => { hal = +b.dataset.h; gambar(); },
-      reset: async b => {
-        const u = rows.find(x => x.id_umkm === b.dataset.id);
-        if (!await UI.konfirmasi('Buat PIN baru untuk <b>' + esc(u.nama_umkm) + '</b>? Kunci akun (bila terkunci) juga dibuka.', { ok: 'Reset PIN' })) return;
-        try { const r = await API.call('umkm_reset_pin', { id_umkm: u.id_umkm }); u.pin = r.pin; u.wajib_ganti_pin = 'ya'; gambar(); tampilPin(u, r.pin, 'PIN baru'); } catch (e) { UI.gagal(e); }
-      },
-      status: async b => {
-        const u = rows.find(x => x.id_umkm === b.dataset.id);
-        if (u.status_akun === 'aktif' && !await UI.konfirmasi('Nonaktifkan akun <b>' + esc(u.nama_umkm) + '</b>? Peserta tidak bisa masuk sampai diaktifkan kembali.', { ok: 'Nonaktifkan', bahaya: true })) return;
-        const lama = u.status_akun; u.status_akun = lama === 'aktif' ? 'nonaktif' : 'aktif'; gambar();
-        UI.toast('Akun ' + u.nama_umkm + ' sekarang ' + u.status_akun + '.');
-        API.call('umkm_status', { id_umkm: u.id_umkm }).catch(e => { u.status_akun = lama; gambar(); UI.gagal(e); });
-      },
       impor: () => this.modalImpor(muat)
     });
+    isi.addEventListener('click', e => {
+      if (e.target.closest('[data-aksi]')) return;
+      const r = e.target.closest('[data-buka]');
+      if (r) { const u = rows.find(x => x.id_umkm === r.dataset.buka); this.detailUmkm(u, () => this.formUmkm(u, {}, x => { Object.assign(u, x); pasang(); })); }
+    });
     muat();
+  },
+
+  detailUmkm(u, ubah) {
+    if (!u) return;
+    const m = UI.modal({
+      title: 'Rincian UMKM', wide: true,
+      body: '<div class="row" style="margin-bottom:16px"><div class="ic-tile">' + UI.ic('store') + '</div><div class="grow"><div class="h-md">' + esc(u.nama_umkm) + '</div><div class="t-sm muted">' + esc(u.nama_pemilik) + (u.gender ? ' · ' + esc(u.gender) : '') + '</div></div><span class="chip">' + esc(u.sektor) + '</span></div>' +
+        '<dl class="kv"><dt>No. WhatsApp</dt><dd><a href="' + this.linkWaKe(u.no_hp) + '" target="_blank" rel="noopener">' + esc(u.no_hp) + '</a></dd><dt>Produk / spesialisasi</dt><dd>' + esc(u.spesialisasi || '–') + '</dd>' +
+        '<dt>Alamat</dt><dd>' + esc(u.alamat || '–') + '</dd><dt>Terdaftar sejak</dt><dd>' + esc(UI.tglPendek(String(u.tgl_dibuat || '').split(' ')[0])) + '</dd><dt>Status akun</dt><dd>' + (u.status_akun === 'aktif' ? 'Aktif' : 'Nonaktif') + ' · <a href="#/akses/peserta" data-tutup>kelola akses</a></dd></dl>' +
+        '<div class="h-sm mt20" style="margin-bottom:10px">Pelatihan yang Pernah Diikuti</div><div data-pel></div>',
+      foot: '<button class="btn outline" data-tutup>Tutup</button><button class="btn primary" data-ubah>' + UI.ic('edit', 'sm') + 'Ubah Data</button>'
+    });
+    $('[data-ubah]', m.el).onclick = () => { m.close(); ubah(); };
+    const box = $('[data-pel]', m.el);
+    UI.loading(box, 2);
+    API.ambil('umkm_riwayat', { id_umkm: u.id_umkm }, rows => {
+      const lulus = rows.filter(r => r.lulus).length, hadir = rows.reduce((s, r) => s + r.hadir, 0), hari = rows.reduce((s, r) => s + r.jumlah_hari, 0);
+      box.innerHTML = rows.length ? '<div class="grid g3" style="margin-bottom:14px"><div class="card well tight center"><div class="t-xs muted">Pelatihan diikuti</div><div class="h-lg c-primary">' + rows.length + '</div></div>' +
+        '<div class="card well tight center"><div class="t-xs muted">Lulus</div><div class="h-lg c-ok">' + lulus + '</div></div><div class="card well tight center"><div class="t-xs muted">Kehadiran</div><div class="h-lg">' + (hari ? Math.round(hadir / hari * 100) : 0) + '%</div></div></div>' +
+        '<div class="list">' + rows.map(r => '<a class="item" href="#/pelatihan/' + esc(r.id_pelatihan) + '" data-tutup style="color:inherit;align-items:flex-start;flex-wrap:wrap"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow" style="min-width:200px"><div class="row g8 wrap"><span class="semi">' + esc(r.judul) + '</span>' + UI.chipStatus(r.status) + '</div>' +
+          '<div class="meta"><span>' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</span><span>' + esc(r.instruktur) + '</span></div>' +
+          '<div class="meta mt8"><span>Hadir ' + r.hadir + '/' + r.jumlah_hari + '</span><span>Pre ' + UI.angka(r.pre) + ' → Post ' + UI.angka(r.post) + (r.kenaikan !== null ? ' (' + (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan) + ')' : '') + '</span><span>Tugas ' + r.tugas_kumpul + '/' + r.tugas_total + '</span>' + (r.no_sertifikat ? '<span>No. ' + esc(r.no_sertifikat) + '</span>' : '') + '</div></div>' +
+          '<div class="col g4" style="align-items:flex-end">' + UI.chipLulus(r.lulus) + (r.sertifikat ? '<span class="chip info sm">' + UI.ic('award', 'sm') + 'Sertifikat</span>' : '') + '</div></a>').join('') + '</div>'
+        : UI.kosong('Belum pernah mengikuti pelatihan. Daftarkan dari halaman detail pelatihan.', 'cap');
+    }, { el: box }).catch(e => UI.galat(box, e));
   },
 
   modalImpor(sesudah) {
@@ -848,25 +905,127 @@ const Admin = {
   },
 
   // ===========================================================
-  // MANAJEMEN AKSES
+  // MANAJEMEN AKSES — akun peserta, instruktur, admin
   // ===========================================================
-  async akses(el) {
-    el.innerHTML = Kelola.kepala('Manajemen Akses', 'Akun Super Admin & kata sandi', '<button class="btn primary sm" data-aksi="baru">' + UI.ic('plus', 'sm') + 'Tambah Admin</button>') + '<div data-isi></div>';
+  async akses(el, sub) {
+    sub = ['peserta', 'instruktur', 'admin'].indexOf(sub) >= 0 ? sub : (sessionStorage.getItem('rl_akses') || 'peserta');
+    sessionStorage.setItem('rl_akses', sub);
+    const kanan = sub === 'admin' ? '<button class="btn primary sm" data-aksi="baruAdmin">' + UI.ic('plus', 'sm') + 'Tambah Admin</button>' : '';
+    el.innerHTML = Kelola.kepala('Manajemen Akses', 'Akun masuk & hak akses: peserta, instruktur, dan admin', kanan) +
+      '<div class="seg" style="max-width:560px">' + [['peserta', 'Akun Peserta UMKM'], ['instruktur', 'Akun Instruktur'], ['admin', 'Akun Admin']].map(x => '<button data-ke="' + x[0] + '" class="' + (sub === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+      '<div class="mt20" data-isi></div>';
     const isi = $('[data-isi]', el);
+    $$('[data-ke]', el).forEach(x => x.onclick = () => { location.hash = '#/akses/' + x.dataset.ke; });
+    if (sub === 'peserta') return this.aksesPeserta(el, isi);
+    if (sub === 'instruktur') return this.aksesInstruktur(el, isi);
+    return this.aksesAdmin(el, isi);
+  },
+
+  aksesPeserta(el, isi) {
+    let rows = [], q = '', f = '', hal = 1, lihat = {};
+    const per = 20;
+    const gambar = () => {
+      const t = rows.filter(u => (!f || (f === 'awal' ? u.wajib_ganti_pin === 'ya' : u.status_akun === f)) && (!q || (u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp).toLowerCase().indexOf(q) >= 0));
+      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>No. WhatsApp (login)</th><th>PIN</th><th>Status akun</th><th>Aksi</th></tr></thead><tbody>' +
+        t.slice((hal - 1) * per, hal * per).map(u => '<tr><td><div class="semi">' + esc(u.nama_umkm) + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + '</div></td><td>' + esc(u.sektor) + '</td><td>' + esc(u.no_hp) + '</td>' +
+          '<td><button class="chip line num" data-aksi="lihatPin" data-id="' + esc(u.id_umkm) + '" title="Tampilkan/sembunyikan">' + UI.ic(lihat[u.id_umkm] ? 'eyeOff' : 'eye', 'sm') + (lihat[u.id_umkm] ? esc(u.pin) : '••••') + '</button>' + (u.wajib_ganti_pin === 'ya' ? ' <span class="chip warn sm" title="Belum mengganti PIN awal">awal</span>' : '') + '</td>' +
+          '<td>' + (u.status_akun === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip bad sm">Nonaktif</span>') + '</td>' +
+          '<td><div class="row g4"><button class="btn icon sm secondary" data-aksi="kirim" data-id="' + esc(u.id_umkm) + '" title="Kirim info akses via WhatsApp">' + UI.ic('message', 'sm') + '</button>' +
+          '<button class="btn icon sm secondary" data-aksi="reset" data-id="' + esc(u.id_umkm) + '" title="Reset PIN">' + UI.ic('key', 'sm') + '</button>' +
+          '<button class="btn icon sm ' + (u.status_akun === 'aktif' ? 'danger' : 'ok') + '" data-aksi="status" data-id="' + esc(u.id_umkm) + '" title="' + (u.status_akun === 'aktif' ? 'Nonaktifkan' : 'Aktifkan') + '">' + UI.ic(u.status_akun === 'aktif' ? 'lock' : 'check', 'sm') + '</button></div></td></tr>').join('') +
+        '</tbody></table></div>' + UI.halaman(t.length, hal, per) : UI.kosong(rows.length ? 'Tidak ada akun yang cocok.' : 'Belum ada akun peserta. Tambahkan UMKM di menu Peserta.', 'users');
+    };
+    const pasang = () => {
+      if (!$('[data-list]', isi)) {
+        isi.innerHTML = '<div class="grid g4" data-stat></div><div class="card mt20"><div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-f>' +
+          [['', 'Semua'], ['aktif', 'Aktif'], ['nonaktif', 'Nonaktif'], ['awal', 'Belum ganti PIN']].map(x => '<button data-v="' + x[0] + '" class="' + (f === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+          '<div class="input-ic" style="min-width:240px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari UMKM, peserta, HP…" data-q></div></div><div data-list></div>' +
+          '<div class="hint mt8">Peserta masuk dengan nomor WhatsApp + PIN 4 angka. Reset PIN juga membuka kunci akun yang terkunci karena 5 kali salah PIN.</div></div>';
+        $('[data-f]', isi).onclick = e => { const b = e.target.closest('button'); if (!b) return; f = b.dataset.v; hal = 1; $$('[data-f] button', isi).forEach(x => x.classList.toggle('on', x === b)); gambar(); };
+        let tunda;
+        $('[data-q]', isi).oninput = e => { clearTimeout(tunda); tunda = setTimeout(() => { q = e.target.value.toLowerCase(); hal = 1; gambar(); }, 150); };
+      }
+      $('[data-stat]', isi).innerHTML = [['Total akun', rows.length, ''], ['Aktif', rows.filter(u => u.status_akun === 'aktif').length, 'c-ok'], ['Nonaktif', rows.filter(u => u.status_akun !== 'aktif').length, 'c-bad'], ['Belum ganti PIN awal', rows.filter(u => u.wajib_ganti_pin === 'ya').length, 'c-warn']]
+        .map(x => '<div class="card stat"><span class="l">' + x[0] + '</span><span class="v ' + x[2] + '">' + x[1] + '</span></div>').join('');
+      gambar();
+    };
+    const muat = async () => {
+      if (!$('[data-list]', isi)) UI.loading(isi, 2);
+      try { await API.ambil('umkm_list', {}, x => { rows = x; pasang(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+    };
+    const cari = b => rows.find(x => x.id_umkm === b.dataset.id);
+    UI.klik(isi, {
+      lihatPin: b => { lihat[b.dataset.id] = !lihat[b.dataset.id]; gambar(); },
+      hal: b => { hal = +b.dataset.h; gambar(); },
+      kirim: b => { const u = cari(b); this.tampilPin(u, u.pin, 'Info Akses Peserta'); },
+      reset: async b => {
+        const u = cari(b);
+        if (!await UI.konfirmasi('Buat PIN baru untuk <b>' + esc(u.nama_umkm) + '</b>? Kunci akun (bila terkunci) juga dibuka.', { ok: 'Reset PIN' })) return;
+        try { await UI.sibuk(b, async () => { const r = await API.call('umkm_reset_pin', { id_umkm: u.id_umkm }); u.pin = r.pin; u.wajib_ganti_pin = 'ya'; pasang(); this.tampilPin(u, r.pin, 'PIN baru'); }); } catch (e) { UI.gagal(e); }
+      },
+      status: async b => {
+        const u = cari(b);
+        if (u.status_akun === 'aktif' && !await UI.konfirmasi('Nonaktifkan akun <b>' + esc(u.nama_umkm) + '</b>? Peserta tidak bisa masuk sampai diaktifkan kembali.', { ok: 'Nonaktifkan', bahaya: true })) return;
+        const lama = u.status_akun; u.status_akun = lama === 'aktif' ? 'nonaktif' : 'aktif'; pasang();
+        UI.toast('Akun ' + u.nama_umkm + ' sekarang ' + u.status_akun + '.');
+        API.call('umkm_status', { id_umkm: u.id_umkm }).catch(e => { u.status_akun = lama; pasang(); UI.gagal(e); });
+      }
+    });
+    muat();
+  },
+
+  aksesInstruktur(el, isi) {
+    let rows = [];
+    const gambar = () => {
+      isi.innerHTML = '<div class="card">' + (rows.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Instruktur</th><th>Kode akses (login)</th><th>Status akun</th><th>Aksi</th></tr></thead><tbody>' +
+        rows.map(i => '<tr><td><div class="semi">' + esc(i.nama) + '</div><div class="t-xs muted">' + esc(i.institusi || '–') + '</div></td>' +
+          '<td><button class="chip line" data-aksi="salin" data-k="' + esc(i.kode_akses) + '" title="Salin">' + UI.ic('key', 'sm') + esc(i.kode_akses) + '</button></td>' +
+          '<td><div class="row g8">' + this.togelAkun(i.status === 'aktif', i.id_instruktur) + '<span class="t-sm">' + (i.status === 'aktif' ? 'Aktif' : 'Nonaktif') + '</span></div></td>' +
+          '<td><div class="row g4"><button class="btn icon sm secondary" data-aksi="kirim" data-id="' + esc(i.id_instruktur) + '" title="Kirim kode via WhatsApp">' + UI.ic('message', 'sm') + '</button>' +
+          '<button class="btn sm outline" data-aksi="kodeBaru" data-id="' + esc(i.id_instruktur) + '">' + UI.ic('refresh', 'sm') + 'Kode baru</button></div></td></tr>').join('') + '</tbody></table></div>'
+        : UI.kosong('Belum ada instruktur. Tambahkan di menu Instruktur.', 'user')) +
+        '<div class="hint mt8">Instruktur masuk dengan nama lengkap + kode akses. Membuat kode baru membuat kode lama tidak berlaku. Akun nonaktif tidak bisa masuk.</div></div>';
+    };
+    const muat = async () => {
+      UI.loading(isi, 2);
+      try { await API.ambil('instruktur_list', {}, x => { rows = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+    };
+    const cari = b => rows.find(x => x.id_instruktur === b.dataset.id);
+    UI.klik(isi, {
+      salin: b => UI.salin(b.dataset.k),
+      kirim: b => { const i = cari(b); this.tampilKode(i, i.kode_akses, 'Info Akses Instruktur'); },
+      kodeBaru: async b => {
+        const i = cari(b);
+        if (!await UI.konfirmasi('Buat kode akses baru untuk <b>' + esc(i.nama) + '</b>? Kode lama <b>' + esc(i.kode_akses) + '</b> tidak bisa dipakai lagi.', { ok: 'Buat kode baru' })) return;
+        try { await UI.sibuk(b, async () => { const r = await API.call('instruktur_simpan', { id_instruktur: i.id_instruktur, kode_baru: true }); i.kode_akses = r.kode_akses; gambar(); this.tampilKode(i, r.kode_akses, 'Kode akses baru'); }); } catch (e) { UI.gagal(e); }
+      },
+      akun: async b => {
+        const i = rows.find(x => x.id_instruktur === b.dataset.id);
+        if (i.status === 'aktif' && !await UI.konfirmasi('Nonaktifkan akun <b>' + esc(i.nama) + '</b>? Instruktur tidak bisa masuk sampai diaktifkan kembali.', { ok: 'Nonaktifkan', bahaya: true })) return;
+        const lama = i.status; i.status = lama === 'aktif' ? 'nonaktif' : 'aktif'; gambar();
+        UI.toast('Akun ' + i.nama + ' sekarang ' + i.status + '.');
+        API.call('instruktur_simpan', { id_instruktur: i.id_instruktur, status: i.status }).catch(e => { i.status = lama; gambar(); UI.gagal(e); });
+      }
+    });
+    muat();
+  },
+  togelAkun(on, id) { return '<button class="toggle ' + (on ? 'on' : '') + '" role="switch" aria-checked="' + !!on + '" data-aksi="akun" data-id="' + esc(id) + '" aria-label="Aktif/nonaktif"></button>'; },
+
+  aksesAdmin(el, isi) {
     const muat = async () => {
       UI.loading(isi, 2);
       try {
         await API.ambil('admin_list', {}, rows => {
-        isi.innerHTML = '<div class="grid g2" style="align-items:start"><div class="card"><div class="card-h"><div class="h-sm">Akun Admin</div><span class="chip sm">' + rows.length + '</span></div><div class="list">' +
-          rows.map(a => '<div class="item"><div class="ic-tile sm solid">' + esc(UI.inisial(a.nama)) + '</div><div class="grow"><div class="semi">' + esc(a.nama) + (a.saya ? ' <span class="chip sm">Anda</span>' : '') + '</div><div class="t-xs muted">@' + esc(a.username) + '</div></div>' +
-            (a.saya ? '' : '<button class="btn icon sm danger" data-aksi="hapus" data-u="' + esc(a.username) + '">' + UI.ic('trash', 'sm') + '</button>') + '</div>').join('') + '</div></div>' +
-          '<div class="card"><div class="h-sm">Ganti Kata Sandi Saya</div><div class="t-sm muted">Minimal 8 karakter. Segera ganti kata sandi bawaan setelah instalasi.</div><button class="btn secondary sm mt12" data-aksi="sandi">' + UI.ic('key', 'sm') + 'Ganti kata sandi</button>' +
-          '<div class="card well tight mt20"><div class="semi t-sm">Hak akses per peran</div><div class="t-sm muted mt8">Super Admin: semua menu. Instruktur: hanya pelatihan miliknya (materi, soal, tugas & nilai) — tidak dapat melihat evaluasi. Peserta: hanya pelatihan yang diikuti. Diperiksa di server pada setiap permintaan.</div></div></div></div>';
+          isi.innerHTML = '<div class="grid g2" style="align-items:start"><div class="card"><div class="card-h"><div class="h-sm">Akun Super Admin</div><span class="chip sm">' + rows.length + '</span></div><div class="list">' +
+            rows.map(a => '<div class="item"><div class="ic-tile sm solid">' + esc(UI.inisial(a.nama)) + '</div><div class="grow"><div class="semi">' + esc(a.nama) + (a.saya ? ' <span class="chip sm">Anda</span>' : '') + '</div><div class="t-xs muted">@' + esc(a.username) + '</div></div>' +
+              (a.saya ? '' : '<button class="btn icon sm danger" data-aksi="hapus" data-u="' + esc(a.username) + '">' + UI.ic('trash', 'sm') + '</button>') + '</div>').join('') + '</div></div>' +
+            '<div class="card"><div class="h-sm">Ganti Kata Sandi Saya</div><div class="t-sm muted">Minimal 8 karakter. Segera ganti kata sandi bawaan setelah instalasi.</div><button class="btn secondary sm mt12" data-aksi="sandi">' + UI.ic('key', 'sm') + 'Ganti kata sandi</button>' +
+            '<div class="card well tight mt20"><div class="semi t-sm">Hak akses per peran</div><div class="t-sm muted mt8">Super Admin: semua menu. Instruktur: hanya pelatihan miliknya (materi, soal, tugas & nilai) — tidak dapat melihat evaluasi. Peserta: hanya pelatihan yang diikuti. Diperiksa di server pada setiap permintaan.</div></div></div></div>';
         }, { el: isi });
       } catch (e) { UI.galat(isi, e, muat); }
     };
     UI.klik(el, {
-      baru: () => UI.form({
+      baruAdmin: () => UI.form({
         title: 'Tambah Admin', submit: 'Tambah',
         fields: [{ name: 'nama', label: 'Nama', full: true }, { name: 'username', label: 'Username', placeholder: 'huruf kecil, angka, titik' }, { name: 'password', label: 'Kata sandi awal', type: 'password', hint: 'Minimal 8 karakter' }],
         onSubmit: async v => { const r = await API.call('admin_simpan', v); UI.toast(r.message); muat(); }
@@ -926,13 +1085,13 @@ const Admin = {
       const [pel, umkm, mat, ins] = await Promise.all([Kelola.daftarPel(), API.cepat('umkm_list'), API.cepat('materi_list'), API.cepat('instruktur_list')]);
       const k = q.toLowerCase(), cocok = s => String(s).toLowerCase().indexOf(k) >= 0;
       const P = pel.filter(p => cocok(p.judul + ' ' + p.tema + ' ' + p.instruktur)), U = umkm.filter(u => cocok(u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp + ' ' + u.spesialisasi)),
-        M = mat.filter(m => cocok(m.judul + ' ' + m.pelatihan)), I = ins.filter(i => cocok(i.nama + ' ' + i.tema_diajar));
+        M = mat.filter(m => cocok(m.judul + ' ' + m.pelatihan)), I = ins.filter(i => cocok(i.nama + ' ' + i.institusi + ' ' + i.no_hp));
       const blok = (judul, n, isiHtml) => '<div class="card"><div class="card-h"><div class="h-sm">' + judul + '</div><span class="chip sm">' + n + '</span></div>' + (n ? '<div class="list">' + isiHtml + '</div>' : '<div class="t-sm muted">Tidak ada hasil.</div>') + '</div>';
       isi.innerHTML = '<div class="col g20">' +
         blok('Pelatihan', P.length, P.slice(0, 10).map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" style="color:inherit"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow"><div class="semi">' + esc(p.judul) + '</div><div class="t-xs muted">' + esc(UI.rentang(p)) + ' · ' + esc(p.instruktur) + '</div></div>' + UI.chipStatus(p.status) + '</a>').join('')) +
         blok('Peserta UMKM', U.length, U.slice(0, 10).map(u => '<a class="item" href="#/peserta" style="color:inherit"><div class="ic-tile sm">' + UI.ic('store', 'sm') + '</div><div class="grow"><div class="semi">' + esc(u.nama_umkm) + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + ' · ' + esc(u.sektor) + ' · ' + esc(u.no_hp) + '</div></div><span class="t-xs muted">' + u.jumlah_pelatihan + ' pelatihan</span></a>').join('')) +
         blok('Materi', M.length, M.slice(0, 10).map(m => '<a class="item" href="' + esc(m.url_lihat) + '" target="_blank" rel="noopener" style="color:inherit"><div class="ic-tile sm">' + UI.ic('file', 'sm') + '</div><div class="grow"><div class="semi">' + esc(m.judul) + '</div><div class="t-xs muted">' + esc(m.pelatihan) + ' · ' + UI.ukuran(m.ukuran) + '</div></div></a>').join('')) +
-        blok('Instruktur', I.length, I.slice(0, 10).map(i => '<a class="item" href="#/instruktur" style="color:inherit"><div class="ic-tile sm">' + UI.ic('user', 'sm') + '</div><div class="grow"><div class="semi">' + esc(i.nama) + '</div><div class="t-xs muted">' + esc(i.tema_diajar || '-') + '</div></div></a>').join('')) + '</div>';
+        blok('Instruktur', I.length, I.slice(0, 10).map(i => '<a class="item" href="#/instruktur" style="color:inherit"><div class="ic-tile sm">' + UI.ic('user', 'sm') + '</div><div class="grow"><div class="semi">' + esc(i.nama) + '</div><div class="t-xs muted">' + esc(i.institusi || '-') + '</div></div></a>').join('')) + '</div>';
     } catch (e) { UI.galat(isi, e, () => this.cari(el, q)); }
   }
 };
