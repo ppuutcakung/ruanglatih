@@ -20,7 +20,7 @@ const Admin = {
     ['peserta', 'users', 'Peserta'], ['absensi', 'checkSquare', 'Absensi'], ['tugas', 'clipboard', 'Tugas Peserta'], ['tes', 'fileQ', 'Pre-Pos Test'],
     ['evaluasi', 'edit', 'Evaluasi Pelatihan'], ['sertifikat', 'award', 'Sertifikat'], ['laporan', 'chart', 'Laporan Rekap'], ['log', 'history', 'Log Aktivitas'],
     ['akses', 'lock', 'Manajemen Akses'], ['pengaturan', 'settings', 'Pengaturan']],
-  subjudul: 'Sentra Pendampingan UMKM',
+  subjudul: 'by PPU UT Cakung',
 
   rute: {
     dasbor: el => Admin.dasbor(el),
