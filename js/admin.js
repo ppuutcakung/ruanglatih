@@ -129,7 +129,7 @@ const Admin = {
         .map(x => '<div class="card ' + (x[3] === 'ok' ? '' : 'well') + ' tight center" style="' + (x[3] === 'ok' ? 'background:var(--ok-bg);border-color:#CDEBDC' : '') + '"><div class="t-xs muted">' + x[0] + '</div><div class="h-lg ' + (x[3] === 'ok' ? 'c-ok' : 'c-primary') + '">' + x[1] + '</div><div class="t-xs muted">' + x[2] + '</div></div>').join('') +
       '</div><div class="t-xs muted mt12">' + E.responden + ' responden evaluasi · CSI = rerata skala 1–4 ÷ 4 × 100%</div></div>';
     const logBox = '<div class="card"><div class="card-h"><div class="ttl"><div class="ic-tile sm">' + UI.ic('history', 'sm') + '</div><span class="h-md">Log Terkini</span></div><a class="link" href="#/log">Lihat Semua</a></div>' +
-      (d.log.length ? '<div class="list">' + d.log.map(l => '<div class="item" style="align-items:flex-start;padding:12px 14px"><span style="width:8px;height:8px;border-radius:50%;background:var(--primary);margin-top:7px;flex-shrink:0"></span><div class="grow"><div class="t-sm">' + esc(l.aksi) + '</div><div class="t-xs muted">' + UI.relatif(l.waktu) + ' · ' + esc(l.peran) + '</div></div></div>').join('') + '</div>' : UI.kosong('Belum ada aktivitas.', 'history')) + '</div>';
+      (d.log.length ? '<div class="list">' + d.log.map(l => '<div class="item" style="align-items:flex-start;padding:12px 14px"><span style="width:8px;height:8px;border-radius:50%;background:var(--primary);margin-top:7px;flex-shrink:0"></span><div class="grow"><div class="t-sm">' + esc(l.aksi) + '</div><div class="t-xs muted">' + UI.relatif(l.waktu) + ' · ' + esc(l.nama || l.peran) + (l.nama ? ' (' + esc(l.peran) + ')' : '') + '</div></div></div>').join('') + '</div>' : UI.kosong('Belum ada aktivitas.', 'history')) + '</div>';
 
     isi.innerHTML = stats + live + '<div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);align-items:start" data-dua><div class="card" data-rekap></div><div class="col g20">' + evalBox + logBox + '</div></div>';
     if (window.innerWidth < 1000) $('[data-dua]', isi).style.gridTemplateColumns = '1fr';
@@ -639,7 +639,7 @@ const Admin = {
   // ABSENSI
   // ===========================================================
   async absensi(el) {
-    el.innerHTML = Kelola.kepala('Absensi', 'Buka slot absensi per hari · peserta menekan tombol absen di HP', '<span data-picker></span><button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button>') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Absensi', 'Buka slot absensi per hari · peserta menekan tombol absen di HP', '<span data-picker></span><button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button><button class="btn primary sm" data-aksi="pdf">' + UI.ic('download', 'sm') + 'Ekspor PDF</button>') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     let idPel = '';
     const muat = async () => {
@@ -663,6 +663,10 @@ const Admin = {
     };
     UI.klik(el, {
       segar: b => UI.sibuk(b, async () => { await API.call('pelatihan_detail', { id_pelatihan: idPel }); muat(); }).catch(UI.gagal),
+      pdf: b => {
+        if (!idPel) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
+        UI.sibuk(b, async () => { const r = await API.call('absensi_export', { id_pelatihan: idPel }, { retry: 2 }); UI.unduhBase64(r); UI.toast('PDF absensi diunduh: ' + r.nama); }, 'Menyusun PDF…').catch(UI.gagal);
+      },
       togel: b => this.aksiTogel(b, v => { const t = b.parentNode.querySelector('.t-sm.semi'); if (t) t.textContent = v ? 'Dibuka' : 'Ditutup'; })
     });
     try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); }); } catch (e) { UI.galat(isi, e, () => this.absensi(el)); }
@@ -843,22 +847,29 @@ const Admin = {
       const rows = d.rekap.filter(r => (!f.id_pelatihan || r.id_pelatihan === f.id_pelatihan) && (!f.sektor || r.sektor === f.sektor) && (!f.bulan || r.bulan === f.bulan) && (!q || (r.nama_umkm + ' ' + r.nama_pemilik).toLowerCase().indexOf(q) >= 0));
       const ev = d.evaluasi.filter(e => e.n && (!f.id_pelatihan || e.id_pelatihan === f.id_pelatihan) && (!f.bulan || e.bulan === f.bulan));
       const lulus = rows.filter(r => r.lulus).length, penuh = rows.filter(r => r.hadir >= r.jumlah_hari).length;
-      const bl = Array.from(new Set(rows.map(r => r.bulan))).sort();
+      // Kelompokkan per program (pelatihan), urut tanggal pelaksanaan
+      const pm = {};
+      rows.forEach(r => { (pm[r.id_pelatihan] = pm[r.id_pelatihan] || { judul: r.pelatihan, tema: r.tema, tgl: r.tgl_mulai || r.bulan, rows: [] }).rows.push(r); });
+      const prog = Object.keys(pm).map(k => pm[k]).sort((a, b) => String(a.tgl).localeCompare(String(b.tgl)));
+      const gulir = (n, svg) => n > 5 ? '<div style="overflow-x:auto"><div style="min-width:' + (n * 110) + 'px">' + svg + '</div></div>' : svg;
       const per = 20;
       const box = $('[data-hasil]', isi);
       box.innerHTML = '<div class="grid g4"><div class="card stat"><span class="l">Peserta (baris)</span><span class="v">' + rows.length + '</span><span class="t-xs muted">' + new Set(rows.map(r => r.id_umkm)).size + ' UMKM unik</span></div>' +
         '<div class="card stat"><span class="l">Kelulusan</span><span class="v c-ok">' + (rows.length ? Math.round(lulus / rows.length * 100) : 0) + '%</span><span class="t-xs muted">' + lulus + ' lulus</span></div>' +
         '<div class="card stat"><span class="l">Hadir penuh</span><span class="v">' + (rows.length ? Math.round(penuh / rows.length * 100) : 0) + '%</span></div>' +
         '<div class="card stat"><span class="l">Rata-rata Pre → Post</span><span class="v c-primary">' + UI.angka(rata(rows.map(r => r.pre))) + ' → ' + UI.angka(rata(rows.map(r => r.post))) + '</span></div></div>' +
-        (bl.length ? '<div class="grid g2" style="align-items:start"><div class="card"><div class="h-sm" style="margin-bottom:12px">Rata-rata Nilai per Bulan</div>' +
-          UI.grafikBatang({ labels: bl.map(b => { const m = b.split('-'); return BLN[+m[1] - 1] + ' ' + m[0].slice(2); }), maks: 100, series: [{ nama: 'Pre-test', warna: '#D8B8C0', nilai: bl.map(b => rata(rows.filter(r => r.bulan === b).map(r => r.pre))) }, { nama: 'Post-test', warna: '#9E3D52', nilai: bl.map(b => rata(rows.filter(r => r.bulan === b).map(r => r.post))) }] }) + '</div>' +
-          '<div class="card"><div class="h-sm" style="margin-bottom:12px">Peserta & Kelulusan per Bulan</div>' +
-          UI.grafikGaris({ labels: bl.map(b => { const m = b.split('-'); return BLN[+m[1] - 1] + ' ' + m[0].slice(2); }), series: [{ nama: 'Peserta', warna: '#B35467', nilai: bl.map(b => rows.filter(r => r.bulan === b).length) }, { nama: 'Lulus', warna: '#2E7D5E', nilai: bl.map(b => rows.filter(r => r.bulan === b && r.lulus).length) }] }) + '</div></div>' : '') +
+        (prog.length ? '<div class="grid g2" style="align-items:start"><div class="card"><div class="card-h"><div class="h-sm">Rata-rata Nilai per Program</div><span class="chip sm">' + prog.length + ' program</span></div>' + gulir(prog.length,
+          UI.grafikBatang({ w: Math.max(560, prog.length * 110), labels: prog.map(x => x.judul), maks: 100, series: [{ nama: 'Pre-test', warna: '#D8B8C0', nilai: prog.map(x => rata(x.rows.map(r => r.pre))) }, { nama: 'Post-test', warna: '#9E3D52', nilai: prog.map(x => rata(x.rows.map(r => r.post))) }] })) + '</div>' +
+          '<div class="card"><div class="card-h"><div class="h-sm">Peserta & Kelulusan per Program</div><span class="chip ok sm">' + lulus + ' lulus</span></div>' + gulir(prog.length,
+          UI.grafikBatang({ w: Math.max(560, prog.length * 110), labels: prog.map(x => x.judul), series: [{ nama: 'Peserta', warna: '#B35467', nilai: prog.map(x => x.rows.length) }, { nama: 'Lulus', warna: '#2E7D5E', nilai: prog.map(x => x.rows.filter(r => r.lulus).length) }] })) + '</div></div>' +
+          '<div class="card tight"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Program</th><th>Tanggal</th><th class="num">Peserta</th><th class="num">Lulus</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Kenaikan</th></tr></thead><tbody>' +
+          prog.map(x => { const a = rata(x.rows.map(r => r.pre)), b = rata(x.rows.map(r => r.post)); return '<tr><td><div class="semi">' + esc(x.judul) + '</div>' + (x.tema ? '<div class="t-xs muted">' + esc(x.tema) + '</div>' : '') + '</td><td class="t-sm">' + esc(UI.tglPendek(x.tgl)) + '</td><td class="num">' + x.rows.length + '</td><td class="num c-ok">' + x.rows.filter(r => r.lulus).length + '</td><td class="num">' + UI.angka(a) + '</td><td class="num">' + UI.angka(b) + '</td><td class="num ' + (a !== null && b !== null && b > a ? 'c-ok' : '') + '">' + (a !== null && b !== null ? (b > a ? '+' : '') + UI.angka(Math.round((b - a) * 10) / 10) : '–') + '</td></tr>'; }).join('') +
+          '</tbody></table></div></div>' : '') +
         (ev.length ? '<div class="card"><div class="h-sm" style="margin-bottom:12px">Skor Evaluasi per Pelatihan (skala 1–4)</div><div style="overflow-x:auto"><div style="min-width:' + Math.max(560, ev.length * 110) + 'px">' +
           UI.grafikBatang({ w: Math.max(640, ev.length * 120), labels: ev.map(e => e.judul), maks: 4, series: [{ nama: 'A. Materi', warna: '#E8B4BF', nilai: ev.map(e => e.A) }, { nama: 'B. Instruktur', warna: '#9E3D52', nilai: ev.map(e => e.B) }, { nama: 'C. Penyelenggaraan', warna: '#6E2D3B', nilai: ev.map(e => e.C) }] }) + '</div></div></div>' : '') +
         '<div class="card"><div class="card-h"><div class="h-sm">Tabel Rekap</div><span class="chip sm">' + rows.length + ' baris</span></div>' +
         (rows.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>Pelatihan</th><th class="num">Hadir</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Naik</th><th class="num">Tugas</th><th>Eval</th><th>Status</th><th>No. Sertifikat</th></tr></thead><tbody>' +
-          rows.slice((hal - 1) * per, hal * per).map(r => '<tr><td><div class="semi">' + esc(r.nama_umkm) + '</div><div class="t-xs muted">' + esc(r.nama_pemilik) + '</div></td><td>' + esc(r.sektor) + '</td><td><div class="clamp1" style="max-width:220px">' + esc(r.pelatihan) + '</div><div class="t-xs muted">' + esc(r.tanggal) + '</div></td>' +
+          rows.slice((hal - 1) * per, hal * per).map(r => '<tr><td><div class="semi">' + esc(r.nama_umkm) + '</div><div class="t-xs muted">' + esc(r.nama_pemilik) + '</div></td><td>' + esc(r.sektor) + '</td><td><div class="clamp1" style="max-width:220px">' + esc(r.pelatihan) + '</div><div class="t-xs muted">' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</div></td>' +
             '<td class="num">' + r.hadir + '/' + r.jumlah_hari + '</td><td class="num">' + UI.angka(r.pre) + '</td><td class="num">' + UI.angka(r.post) + '</td><td class="num">' + (r.kenaikan === null ? '–' : (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan)) + '</td><td class="num">' + esc(r.tugas) + '</td>' +
             '<td>' + (r.evaluasi ? UI.ic('check', 'sm') : '–') + '</td><td>' + UI.chipLulus(r.lulus) + '</td><td class="t-xs">' + esc(r.no_sertifikat || '–') + '</td></tr>').join('') + '</tbody></table></div>' + UI.halaman(rows.length, hal, per)
           : UI.kosong('Tidak ada data untuk filter ini.', 'chart')) + '</div>';
@@ -882,9 +893,9 @@ const Admin = {
     let rows = [], q = '', peran = '', hal = 1;
     const per = 30;
     const gambar = () => {
-      const t = rows.filter(r => (!peran || r.peran === peran) && (!q || (r.aksi + ' ' + r.id_pengguna).toLowerCase().indexOf(q) >= 0));
-      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Waktu</th><th>Peran</th><th>Pengguna</th><th>Aktivitas</th></tr></thead><tbody>' +
-        t.slice((hal - 1) * per, hal * per).map(r => '<tr><td class="t-sm" style="white-space:nowrap">' + esc(UI.waktu(r.waktu)) + '</td><td><span class="chip sm ' + (r.peran === 'admin' ? 'solid' : (r.peran === 'instruktur' ? 'info' : '')) + '">' + esc(r.peran) + '</span></td><td class="t-sm">' + esc(r.id_pengguna) + '</td><td>' + esc(r.aksi) + '</td></tr>').join('') +
+      const t = rows.filter(r => (!peran || r.peran === peran) && (!q || (r.aksi + ' ' + r.id_pengguna + ' ' + (r.nama || '')).toLowerCase().indexOf(q) >= 0));
+      $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Waktu</th><th>Peran</th><th>Nama Pengguna</th><th>Aktivitas</th></tr></thead><tbody>' +
+        t.slice((hal - 1) * per, hal * per).map(r => '<tr><td class="t-sm" style="white-space:nowrap">' + esc(UI.waktu(r.waktu)) + '</td><td><span class="chip sm ' + (r.peran === 'admin' ? 'solid' : (r.peran === 'instruktur' ? 'info' : '')) + '">' + esc(r.peran) + '</span></td><td class="t-sm"><div class="semi">' + esc(r.nama || r.id_pengguna) + '</div></td><td>' + esc(r.aksi) + '</td></tr>').join('') +
         '</tbody></table></div>' + UI.halaman(t.length, hal, per) : UI.kosong('Tidak ada log.', 'history');
     };
     const muat = async () => {
