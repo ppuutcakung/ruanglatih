@@ -19,7 +19,12 @@ var App = {
     return this._server;
   },
 
+  /** Tautan dari scan QR absensi: #/absen/<id_pelatihan>/<kode> */
+  ruteQR() { const m = location.hash.match(/^#\/absen\/([^/?]+)\/([^/?]+)/); return m ? { id: decodeURIComponent(m[1]), kode: decodeURIComponent(m[2]) } : null; },
+
   render() {
+    const qr = this.ruteQR();
+    if (qr) return this.halamanAbsenQR(qr.id, qr.kode);
     const u = Sesi.user();
     if (!u) return this.halamanMasuk();
     if (u.peran === 'peserta' && u.wajib_ganti_pin) return this.halamanGantiPin();
@@ -215,6 +220,64 @@ var App = {
   },
 
   // ===========================================================
+  // ABSENSI VIA SCAN QR (tanpa login)
+  // ===========================================================
+  async halamanAbsenQR(id, kode) {
+    this._shell = ''; this._qr = true;
+    $$('.overlay').forEach(o => o.remove());
+    const app = $('#app');
+    app.innerHTML = this.kerangkaAuth('Absensi Pelatihan', 'Pusat Pendampingan UMKM Cakung', '<div data-qr></div>');
+    const box = $('[data-qr]', app);
+    UI.loading(box, 2);
+    let d;
+    try { d = await API.call('qr_info', { id_pelatihan: id, kode: kode }, { retry: 5 }); }
+    catch (e) {
+      box.innerHTML = '<div class="empty"><div class="ic-tile" style="background:var(--bad-bg);color:var(--bad)">' + UI.ic('alert', 'lg') + '</div><div class="semi">QR tidak dapat dipakai</div><div class="t-sm">' + esc(e.message) + '</div></div>' +
+        '<a class="btn outline block mt12" href="#/">Buka RuangLatih</a>';
+      return;
+    }
+    const bisa = d.hari.filter(h => h.buka);
+    let hari = (d.hari.find(h => h.hari_ini && h.buka) || bisa[0] || {}).hari_ke || 0;
+    const nmU = localStorage.getItem('rl_qr_umkm') || localStorage.getItem('rl_umkm') || '';
+    const nmP = localStorage.getItem('rl_qr_peserta') || '';
+    box.innerHTML = '<div class="center" style="margin-bottom:16px"><div class="chip solid sm" style="margin-bottom:8px">' + UI.ic('checkSquare', 'sm') + 'Scan Absensi</div>' +
+      '<div class="h-md">' + esc(d.judul) + '</div><div class="col g4 t-sm muted mt8" style="align-items:center"><span class="row g4">' + UI.ic('clock', 'sm') + esc(d.jam || '-') + '</span>' +
+      '<span class="row g4">' + UI.ic(d.format === 'online' ? 'link' : 'pin', 'sm') + '<span class="clamp1">' + esc(d.format === 'online' ? 'Online' : d.lokasi) + '</span></span><span class="row g4">' + UI.ic('user', 'sm') + esc(d.instruktur) + '</span></div></div>' +
+      (bisa.length ? '<form class="col g20" data-form novalidate>' +
+        '<div class="field"><span class="lbl">Pilih hari sesi</span><div class="seg" data-hari>' + d.hari.map(h => '<button type="button" data-v="' + h.hari_ke + '" class="' + (h.hari_ke === hari ? 'on' : '') + '"' + (h.buka ? '' : ' disabled style="opacity:.45"') + '>Hari ' + h.hari_ke + '<br><small style="font-weight:500">' + esc(UI.tglPendek(h.tanggal)) + (h.buka ? '' : ' · belum dibuka') + '</small></button>').join('') + '</div></div>' +
+        '<div class="field"><label for="q_umkm">Nama UMKM / Usaha</label><div class="input-ic">' + UI.ic('store') + '<input class="input" id="q_umkm" autocomplete="organization" autocapitalize="words" spellcheck="false" placeholder="mis. Dapur Berkah Bu Ani" value="' + esc(nmU) + '"></div></div>' +
+        '<div class="field"><label for="q_peserta">Nama Peserta</label><div class="input-ic">' + UI.ic('user') + '<input class="input" id="q_peserta" autocomplete="name" autocapitalize="words" placeholder="Nama Anda yang didaftarkan" value="' + esc(nmP) + '"></div></div>' +
+        '<div class="err" hidden data-err></div><button class="btn primary block" type="submit" data-kirim style="height:52px">' + UI.ic('hand') + 'Kirim Absensi</button></form>'
+        : '<div class="card well center t-sm">' + UI.ic('lock', 'sm') + ' Absensi untuk pelatihan ini belum dibuka. Silakan hubungi panitia.</div>');
+    const seg = $('[data-hari]', box);
+    if (seg) seg.style.cssText += ';height:auto';
+    $$('[data-hari] button', box).forEach(b => { b.style.height = 'auto'; b.style.padding = '8px 6px'; b.style.lineHeight = '1.3'; });
+    if (seg) seg.onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; hari = +b.dataset.v; $$('button', seg).forEach(x => x.classList.toggle('on', x === b)); };
+    const f = $('[data-form]', box);
+    if (!f) return;
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const err = $('[data-err]', f), btn = $('[data-kirim]', f);
+      const nu = $('#q_umkm').value.trim().replace(/\s+/g, ' '), np = $('#q_peserta').value.trim().replace(/\s+/g, ' ');
+      err.hidden = true;
+      const salah = !hari ? 'Pilih hari sesi.' : !nu ? 'Isi nama UMKM / usaha.' : !np ? 'Isi nama peserta.' : '';
+      if (salah) { err.textContent = salah; err.hidden = false; return; }
+      try {
+        let r;
+        await UI.sibuk(btn, async ubah => {
+          r = await API.call('qr_absen', { id_pelatihan: id, kode: kode, hari_ke: hari, nama_umkm: nu, nama_peserta: np }, { retry: 8, onRetry: n => ubah('Antrean ramai, mencoba lagi (' + n + ')…') });
+        }, 'Mengirim…');
+        localStorage.setItem('rl_qr_umkm', nu); localStorage.setItem('rl_qr_peserta', np);
+        box.innerHTML = '<div class="center col g8" style="padding:8px 0"><div class="ic-tile" style="width:72px;height:72px;border-radius:50%;background:var(--ok-bg);color:var(--ok);margin:0 auto">' + UI.ic('checkCircle', 'lg') + '</div>' +
+          '<div class="h-md mt8">' + (r.sudah ? 'Sudah Tercatat Hadir' : 'Absensi Berhasil!') + '</div><div class="t-sm muted">' + esc(r.judul) + '</div>' +
+          '<div class="card well tight mt12" style="text-align:left"><dl class="kv"><dt>Hari</dt><dd>Hari ' + r.hari_ke + ' · ' + esc(UI.tglHari(r.tanggal)) + '</dd><dt>UMKM</dt><dd>' + esc(r.nama_umkm) + '</dd><dt>Peserta</dt><dd>' + esc(r.nama_peserta) + '</dd><dt>Jam</dt><dd>' + esc(UI.jam(r.waktu)) + ' WIB</dd></dl></div>' +
+          '<div class="t-sm muted mt8">' + (r.sudah ? 'Absensi Anda sudah tercatat sebelumnya.' : 'Terima kasih, selamat mengikuti pelatihan. Anda tidak perlu absen lagi di aplikasi.') + '</div>' +
+          '<a class="btn primary block mt12" href="#/">' + UI.ic('home', 'sm') + 'Buka Aplikasi RuangLatih</a></div>';
+      } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    };
+  },
+
+  // ===========================================================
   // KERANGKA TAMPILAN PER PERAN
   // ===========================================================
   kerangka() {
@@ -300,14 +363,18 @@ var App = {
   },
 
   mulai() {
-    window.addEventListener('hashchange', () => { if (Sesi.user() && !(Sesi.user().peran === 'peserta' && Sesi.user().wajib_ganti_pin)) this.tampil(); });
+    window.addEventListener('hashchange', () => {
+      if (this.ruteQR()) return this.render();
+      if (this._qr) { this._qr = false; return this.render(); }
+      if (Sesi.user() && !(Sesi.user().peran === 'peserta' && Sesi.user().wajib_ganti_pin)) this.tampil();
+    });
     if (!GAS_URL || GAS_URL.indexOf('TEMPEL_') >= 0) {
       $('#app').innerHTML = this.kerangkaAuth(APP_CONFIG.nama, 'Konfigurasi belum lengkap',
         '<div class="col"><div class="h-sm">GAS_URL belum diisi</div><div class="t-sm muted">Buka file <b>js/config.js</b>, tempel URL Web App Apps Script (berakhiran <b>/exec</b>), simpan, lalu unggah ulang ke GitHub. Lihat PANDUAN-INSTALASI.md.</div></div>');
       return;
     }
     this.render();
-    if (Sesi.user()) setTimeout(() => API.panaskan(), 600); // ⚡ panaskan data menu di latar
+    if (Sesi.user() && !this.ruteQR()) setTimeout(() => API.panaskan(), 600); // ⚡ panaskan data menu di latar
     // Segarkan lagi saat aplikasi dibuka kembali dari latar belakang (HP)
     document.addEventListener('visibilitychange', () => { if (!document.hidden && Sesi.user()) API.panaskanNanti(); });
     // Periksa ulang sesi di latar belakang (akun dinonaktifkan / token kedaluwarsa)

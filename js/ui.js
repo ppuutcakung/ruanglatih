@@ -387,6 +387,31 @@ const UI = {
       '<button class="btn xs outline" data-aksi="hal" data-h="' + Math.min(n, hal + 1) + '"' + (hal >= n ? ' disabled' : '') + '>Berikutnya</button></div></div>';
   },
 
+  /** Muat skrip eksternal sekali saja (mis. pembuat QR dari cdnjs). */
+  muatSkrip(url) {
+    UI._skrip = UI._skrip || {};
+    if (!UI._skrip[url]) UI._skrip[url] = new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = url; sc.async = true;
+      sc.onload = res; sc.onerror = () => { delete UI._skrip[url]; rej(new Error('Gagal memuat ' + url)); };
+      document.head.appendChild(sc);
+    });
+    return UI._skrip[url];
+  },
+  /** Gambar QR ke dalam el. Utama: qrcodejs (cdnjs); cadangan: gambar dari api.qrserver.com. */
+  async qr(el, teks, ukuran) {
+    ukuran = ukuran || 280;
+    el.innerHTML = '';
+    try {
+      await UI.muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+      new window.QRCode(el, { text: teks, width: ukuran, height: ukuran, colorDark: '#231B1E', colorLight: '#ffffff', correctLevel: window.QRCode.CorrectLevel.M });
+      const img = el.querySelector('img'); if (img) { img.style.width = '100%'; img.style.height = 'auto'; }
+      const cv = el.querySelector('canvas'); if (cv) { cv.style.width = '100%'; cv.style.height = 'auto'; }
+    } catch (e) {
+      el.innerHTML = '<img alt="QR absensi" style="width:100%;height:auto" crossorigin="anonymous" src="https://api.qrserver.com/v1/create-qr-code/?margin=8&size=' + ukuran + 'x' + ukuran + '&data=' + encodeURIComponent(teks) + '">';
+    }
+  },
+
   salin(teks) {
     const ok = () => UI.toast('Disalin: ' + teks);
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(teks).then(ok, () => UI.toast(teks, 'info'));

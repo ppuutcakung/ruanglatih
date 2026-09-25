@@ -650,15 +650,16 @@ const Admin = {
   // ABSENSI
   // ===========================================================
   async absensi(el) {
-    el.innerHTML = Kelola.kepala('Absensi', 'Buka slot absensi per hari · peserta menekan tombol absen di HP', '<span data-picker></span><button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button><button class="btn primary sm" data-aksi="pdf">' + UI.ic('download', 'sm') + 'Ekspor PDF</button>') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Absensi', 'Peserta absen lewat scan QR di ruang pelatihan atau tombol absen di aplikasi', '<span data-picker></span><button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button><button class="btn outline sm" data-aksi="pdf">' + UI.ic('download', 'sm') + 'Ekspor PDF</button><button class="btn primary sm" data-aksi="qr">' + UI.ic('checkSquare', 'sm') + 'QR Absensi</button>') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
-    let idPel = '';
+    let idPel = '', detAbs = null;
     const muat = async () => {
       if (!idPel) { isi.innerHTML = Kelola.tanpaPelatihan(); return; }
       UI.loading(isi, 2);
       try {
         const idA = idPel;
         await API.ambil('pelatihan_detail', { id_pelatihan: idA }, d => { if (idA !== idPel) return;
+        detAbs = d;
         const p = d.pelatihan, n = d.peserta.length;
         isi.innerHTML = '<div class="grid ' + (p.jumlah_hari === 2 ? 'g2' : '') + '">' + p.tanggal_hari.map((t, i) => {
           const h = i + 1, hadir = d.peserta.filter(x => x.absen[h]).length, k = 'absen_' + h;
@@ -667,13 +668,17 @@ const Admin = {
         }).join('') + '</div>' +
           '<div class="card mt20"><div class="card-h"><div class="h-sm">Rekap Kehadiran</div><span class="chip sm">' + n + ' peserta</span></div>' +
           (n ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th>' + p.tanggal_hari.map((t, i) => '<th>Hari ' + (i + 1) + '</th>').join('') + '<th>Total</th></tr></thead><tbody>' +
-            d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + '</div></td>' + p.tanggal_hari.map((t, i) => '<td>' + (x.absen[i + 1] ? '<span class="chip ok sm">' + UI.ic('check', 'sm') + UI.jam(x.absen[i + 1]) + '</span>' : '<span class="chip line sm">Belum</span>') + '</td>').join('') +
+            d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + '</div></td>' + p.tanggal_hari.map((t, i) => '<td>' + (x.absen[i + 1] ? '<span class="chip ok sm">' + UI.ic('check', 'sm') + UI.jam(x.absen[i + 1]) + '</span>' + ((x.metode_absen || {})[i + 1] === 'qr' ? ' <span class="chip info sm" title="Absen lewat scan QR">QR</span>' : '') : '<span class="chip line sm">Belum</span>') + '</td>').join('') +
               '<td class="semi">' + x.hadir + '/' + x.jumlah_hari + '</td></tr>').join('') + '</tbody></table></div>' : UI.kosong('Belum ada peserta terdaftar.', 'users')) + '</div>';
         }, { el: isi, segar: 3000 });
       } catch (e) { UI.galat(isi, e, muat); }
     };
     UI.klik(el, {
       segar: b => UI.sibuk(b, async () => { await API.call('pelatihan_detail', { id_pelatihan: idPel }); muat(); }).catch(UI.gagal),
+      qr: () => {
+        if (!idPel || !detAbs || !detAbs.qr_kode) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
+        this.modalQR(detAbs.pelatihan, detAbs.qr_kode);
+      },
       pdf: b => {
         if (!idPel) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
         UI.sibuk(b, async () => { const r = await API.call('absensi_export', { id_pelatihan: idPel }, { retry: 2 }); UI.unduhBase64(r); UI.toast('PDF absensi diunduh: ' + r.nama); }, 'Menyusun PDF…').catch(UI.gagal);
@@ -681,6 +686,66 @@ const Admin = {
       togel: b => this.aksiTogel(b, v => { const t = b.parentNode.querySelector('.t-sm.semi'); if (t) t.textContent = v ? 'Dibuka' : 'Ditutup'; })
     });
     try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); }); } catch (e) { UI.galat(isi, e, () => this.absensi(el)); }
+  },
+
+  /** QR absensi per pelatihan: tampil di layar/proyektor, unduh PNG, salin tautan. */
+  modalQR(p, kode) {
+    const url = location.origin + location.pathname + '#/absen/' + encodeURIComponent(p.id_pelatihan) + '/' + kode;
+    const judul = /^pelatihan\b/i.test(p.judul) ? p.judul : 'Pelatihan ' + p.judul;
+    const m = UI.modal({
+      title: 'QR Absensi', wide: true,
+      body: '<div class="grid g2" style="align-items:center"><div class="card tight" style="max-width:320px;margin:0 auto;width:100%"><div data-qr style="aspect-ratio:1"></div></div>' +
+        '<div class="col g8"><div class="h-sm">' + esc(judul) + '</div><div class="t-sm muted">' + esc(UI.rentang(p)) + ' · ' + esc(p.jam) + '</div>' +
+        '<div class="card well tight t-sm mt8"><b>Cara pakai</b><br>1. Tampilkan QR di layar/proyektor atau cetak di pintu masuk.<br>2. Peserta scan dengan kamera HP (tanpa login).<br>3. Pilih Hari 1/2, isi Nama UMKM & Nama Peserta.<br>4. Hanya UMKM yang terdaftar di pelatihan ini yang diterima — langsung tercatat di sini & di akun peserta.</div>' +
+        '<div class="hint">Hari yang bisa diisi: tanggal pelaksanaan hari itu, atau hari yang sakelar absensinya sedang dibuka.</div>' +
+        '<div class="row g8 mt8"><input class="input" style="height:40px;font-size:12px" readonly value="' + esc(url) + '" data-url><button class="btn icon sm secondary" data-salin title="Salin tautan">' + UI.ic('copy', 'sm') + '</button></div></div></div>',
+      foot: '<button class="btn outline" data-unduh>' + UI.ic('download', 'sm') + 'Unduh PNG</button><button class="btn primary" data-layar>' + UI.ic('eye', 'sm') + 'Tampilkan Layar Penuh</button>'
+    });
+    UI.qr($('[data-qr]', m.el), url, 600);
+    $('[data-salin]', m.el).onclick = () => UI.salin(url);
+    $('[data-layar]', m.el).onclick = () => this.layarQR(judul, p, url);
+    $('[data-unduh]', m.el).onclick = async e => {
+      const b = e.currentTarget;
+      try {
+        await UI.sibuk(b, async () => {
+          const src = $('[data-qr] canvas', m.el) || $('[data-qr] img', m.el);
+          if (!src) throw new Error('QR belum siap.');
+          if (src.tagName === 'IMG' && !src.complete) await new Promise(r => { src.onload = r; src.onerror = r; });
+          const W = 1240, H = 1600, c = document.createElement('canvas'); c.width = W; c.height = H;
+          const g = c.getContext('2d');
+          g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+          g.fillStyle = '#9E3D52'; g.fillRect(0, 0, W, 190);
+          g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = 'bold 64px Arial'; g.fillText('SCAN ABSENSI', W / 2, 120);
+          g.fillStyle = '#6E2D3B'; g.font = 'bold 52px Arial';
+          const baris = []; let l = '';
+          judul.split(' ').forEach(w => { if (g.measureText(l + ' ' + w).width > W - 140) { baris.push(l); l = w; } else l = (l ? l + ' ' : '') + w; });
+          baris.push(l);
+          baris.slice(0, 3).forEach((t, i) => g.fillText(t, W / 2, 290 + i * 66));
+          const y0 = 290 + Math.min(3, baris.length) * 66 + 10;
+          g.fillStyle = '#665559'; g.font = '34px Arial'; g.fillText(UI.rentang(p) + ' · ' + (p.jam || ''), W / 2, y0);
+          g.drawImage(src, (W - 860) / 2, y0 + 40, 860, 860);
+          g.fillStyle = '#231B1E'; g.font = 'bold 38px Arial'; g.fillText('Pusat Pendampingan UMKM Cakung', W / 2, H - 150);
+          g.fillStyle = '#665559'; g.font = '30px Arial'; g.fillText('Buka kamera HP → scan → pilih hari → isi nama UMKM & peserta', W / 2, H - 95);
+          const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = 'QR Absensi - ' + p.judul.replace(/[\\/:*?"<>|]/g, '') + '.png'; a.click();
+        }, 'Menyiapkan…');
+      } catch (ex) { UI.gagal('Gagal membuat PNG: ' + ex.message + '. Gunakan screenshot sebagai alternatif.'); }
+    };
+  },
+  layarQR(judul, p, url) {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:linear-gradient(160deg,#9E3D52,#6E2D3B);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;color:#fff;text-align:center';
+    ov.innerHTML = '<button aria-label="Tutup" style="position:absolute;top:18px;right:18px;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff" data-x>' + UI.ic('x') + '</button>' +
+      '<div style="font-size:clamp(14px,2vw,20px);letter-spacing:.2em;font-weight:700;opacity:.85">SCAN ABSENSI</div><div style="font-size:clamp(22px,3.4vw,42px);font-weight:800;max-width:1000px;line-height:1.2">' + esc(judul) + '</div>' +
+      '<div style="font-size:clamp(13px,1.6vw,18px);opacity:.85">' + esc(UI.rentang(p)) + ' · ' + esc(p.jam) + '</div>' +
+      '<div style="background:#fff;padding:18px;border-radius:24px;width:min(62vh,80vw)"><div data-qr2 style="aspect-ratio:1"></div></div>' +
+      '<div style="font-size:clamp(13px,1.6vw,18px);opacity:.9">Buka kamera HP → scan → pilih hari → isi nama UMKM & nama peserta</div><div style="font-weight:700">Pusat Pendampingan UMKM Cakung</div>';
+    document.body.appendChild(ov);
+    UI.qr($('[data-qr2]', ov), url, 800);
+    const tutup = () => { ov.remove(); document.removeEventListener('keydown', esc_); if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); };
+    const esc_ = e => { if (e.key === 'Escape') tutup(); };
+    document.addEventListener('keydown', esc_);
+    $('[data-x]', ov).onclick = tutup;
+    if (ov.requestFullscreen) ov.requestFullscreen().catch(() => { });
   },
 
   // ===========================================================

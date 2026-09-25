@@ -34,7 +34,7 @@ const TULIS = {
   pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
   admin_simpan: 'admin', admin_hapus: 'admin', sert_template: 'sert', sert_terbitkan: 'sert',
-  p_absen: 'absen', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'
+  p_absen: 'absen', qr_absen: 'absen', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'
 };
 
 /** Penyimpanan cache: memori (instan) + localStorage (bertahan saat aplikasi dibuka ulang). */
