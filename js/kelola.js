@@ -166,7 +166,18 @@ const Kelola = {
   async halamanSoal(el, opt) {
     opt = opt || {};
     const judul = opt.judul;
-    el.innerHTML = this.kepala(judul || 'Bank Soal Pre/Post-Test', 'Soal pilihan ganda · skor dihitung otomatis di server', '<span data-picker></span><button class="btn primary sm" data-aksi="tambah">' + UI.ic('plus', 'sm') + 'Tambah Soal</button>') + '<div data-atas></div><div data-isi></div>';
+    el.innerHTML = this.kepala(judul || 'Bank Soal Pre/Post-Test', 'Soal pilihan ganda · skor dihitung otomatis di server', '<span data-picker></span><button class="btn primary sm" data-aksi="tambah">' + UI.ic('plus', 'sm') + 'Tambah Soal</button>') + '<div data-atas></div>' +
+      (opt.rekap ? '<div class="seg" data-mode style="max-width:460px;margin-bottom:20px"><button data-v="rekap">Rekap Nilai Peserta</button><button data-v="soal">Bank Soal</button></div><div data-rekap></div>' : '') + '<div data-isi></div>';
+    let mode = sessionStorage.getItem('rl_tesmode') || 'rekap';
+    const aturMode = () => {
+      if (!opt.rekap) return;
+      $$('[data-mode] button', el).forEach(b => b.classList.toggle('on', b.dataset.v === mode));
+      $('[data-rekap]', el).hidden = mode !== 'rekap';
+      $('[data-isi]', el).hidden = mode === 'rekap';
+      $('[data-aksi="tambah"]', el).hidden = mode === 'rekap';
+    };
+    if (opt.rekap) $('[data-mode]', el).onclick = e => { const b = e.target.closest('button'); if (!b) return; mode = b.dataset.v; sessionStorage.setItem('rl_tesmode', mode); aturMode(); };
+    aturMode();
     const isi = $('[data-isi]', el);
     let idPel = '', data = { soal: [] }, filter = 'semua';
     const gambar = () => {
@@ -217,7 +228,63 @@ const Kelola = {
       }
     });
     isi.addEventListener('click', e => { const b = e.target.closest('[data-f] button'); if (b) { filter = b.dataset.v; gambar(); } });
-    try { await this.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); if (opt.atas) opt.atas($('[data-atas]', el), id); }); } catch (e) { UI.galat(isi, e, () => this.halamanSoal(el, opt)); }
+    try { await this.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); if (opt.atas) opt.atas($('[data-atas]', el), id); if (opt.rekap) this.rekapTes($('[data-rekap]', el), id); }); } catch (e) { UI.galat(isi, e, () => this.halamanSoal(el, opt)); }
+  },
+
+  /**
+   * Rekap nilai pre/post-test per peserta satu pelatihan:
+   * siapa yang sudah/belum mengerjakan, skor, jumlah benar, waktu, kenaikan.
+   */
+  rekapTes(host, idPel) {
+    if (!idPel) { host.innerHTML = this.tanpaPelatihan(); return; }
+    host._id = idPel;
+    let d = null, f = host._f || 'semua', q = '';
+    const sel = (x, j) => x[j] !== null && x[j] !== undefined;
+    const sel2 = (x, j) => {
+      if (!sel(x, j)) return '<span class="chip line sm">Belum</span>';
+      const i = x[j + '_info'];
+      return '<div class="col g4" style="align-items:flex-end"><span class="chip ok sm">' + UI.ic('check', 'sm') + UI.angka(x[j]) + '</span>' + (i ? '<span class="t-xs muted">' + i.benar + ' benar · ' + esc(UI.waktu(i.waktu)) + '</span>' : '') + '</div>';
+    };
+    const gambar = () => {
+      const rows = d.rows, n = rows.length;
+      const nPre = rows.filter(x => sel(x, 'pre')).length, nPost = rows.filter(x => sel(x, 'post')).length;
+      const naik = rows.filter(x => x.kenaikan !== null && x.kenaikan > 0).length;
+      const cocok = x => ({ semua: true, belumPre: !sel(x, 'pre'), belumPost: !sel(x, 'post'), lengkap: sel(x, 'pre') && sel(x, 'post') })[f] &&
+        (!q || (x.nama_umkm + ' ' + x.nama_pemilik + ' ' + x.no_hp).toLowerCase().indexOf(q) >= 0);
+      const t = rows.filter(cocok);
+      const bar = (a, b) => '<div class="bar mt8"><i style="width:' + (b ? Math.round(a / b * 100) : 0) + '%"></i></div>';
+      host.innerHTML = '<div class="grid g4"><div class="card stat"><span class="l">Peserta terdaftar</span><span class="v">' + n + '</span></div>' +
+        '<div class="card stat"><span class="l">Sudah Pre-test</span><span class="v">' + nPre + ' <span class="t-sm muted">/ ' + n + '</span></span>' + bar(nPre, n) + '</div>' +
+        '<div class="card stat"><span class="l">Sudah Post-test</span><span class="v">' + nPost + ' <span class="t-sm muted">/ ' + n + '</span></span>' + bar(nPost, n) + '</div>' +
+        '<div class="card stat"><span class="l">Rata-rata Pre → Post</span><span class="v c-primary">' + UI.angka(d.rata.pre) + ' → ' + UI.angka(d.rata.post) + '</span><span class="t-xs muted">' + naik + ' peserta nilainya naik</span></div></div>' +
+        '<div class="card mt20"><div class="card-h wrap"><div class="h-sm">Rekap Nilai per Peserta</div><button class="btn outline sm" data-csv>' + UI.ic('download', 'sm') + 'Unduh CSV</button></div>' +
+        '<div class="row between wrap" style="margin-bottom:14px"><div class="seg pill" data-f>' +
+        [['semua', 'Semua (' + n + ')'], ['belumPre', 'Belum Pre-test (' + (n - nPre) + ')'], ['belumPost', 'Belum Post-test (' + (n - nPost) + ')'], ['lengkap', 'Sudah keduanya']].map(x => '<button data-v="' + x[0] + '" class="' + (f === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
+        '<div class="input-ic" style="min-width:220px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari UMKM atau peserta…" data-q value="' + esc(q) + '"></div></div>' +
+        (t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th class="num">No</th><th>UMKM / Peserta</th><th>Sektor</th><th class="num">Pre-test</th><th class="num">Post-test</th><th class="num">Kenaikan</th><th>Keterangan</th></tr></thead><tbody>' +
+          t.map((x, i) => {
+            const ket = !sel(x, 'pre') && !sel(x, 'post') ? '<span class="chip warn sm">Belum mengerjakan</span>' : !sel(x, 'post') ? '<span class="chip info sm">Menunggu post-test</span>' : !sel(x, 'pre') ? '<span class="chip warn sm">Tanpa pre-test</span>'
+              : (x.kenaikan > 0 ? '<span class="chip ok sm">' + UI.ic('trend', 'sm') + 'Naik</span>' : '<span class="chip bad sm">Tidak naik</span>');
+            return '<tr><td class="num">' + (i + 1) + '</td><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + '</div></td><td>' + esc(x.sektor) + '</td>' +
+              '<td class="num">' + sel2(x, 'pre') + '</td><td class="num">' + sel2(x, 'post') + '</td>' +
+              '<td class="num semi ' + (x.kenaikan > 0 ? 'c-ok' : (x.kenaikan !== null ? 'c-bad' : '')) + '">' + (x.kenaikan === null ? '–' : (x.kenaikan > 0 ? '+' : '') + UI.angka(x.kenaikan)) + '</td><td>' + ket + '</td></tr>';
+          }).join('') + '</tbody></table></div>'
+          : UI.kosong(n ? 'Tidak ada peserta di kategori ini.' : 'Belum ada peserta terdaftar di pelatihan ini.', 'users')) + '</div>';
+      $('[data-f]', host).onclick = e => { const b = e.target.closest('button'); if (b) { f = host._f = b.dataset.v; gambar(); } };
+      const inp = $('[data-q]', host);
+      inp.oninput = () => { q = inp.value.toLowerCase(); const pos = inp.selectionStart; gambar(); const c = $('[data-q]', host); c.focus(); c.setSelectionRange(pos, pos); };
+      $('[data-csv]', host).onclick = () => {
+        const h = ['No', 'Nama UMKM', 'Peserta', 'Sektor', 'Pre-test', 'Waktu Pre-test', 'Post-test', 'Waktu Post-test', 'Kenaikan'];
+        const qq = v => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
+        const csv = [h].concat(rows.map((x, i) => [i + 1, x.nama_umkm, x.nama_pemilik, x.sektor, sel(x, 'pre') ? x.pre : 'Belum', x.pre_info ? x.pre_info.waktu : '', sel(x, 'post') ? x.post : 'Belum', x.post_info ? x.post_info.waktu : '', x.kenaikan === null ? '' : x.kenaikan]))
+          .map(r => r.map(qq).join(';')).join('\r\n');
+        const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+        const a = document.createElement('a'); a.href = url; a.download = 'Rekap Pre-Post Test - ' + d.pelatihan.judul + '.csv'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      };
+    };
+    UI.loading(host, 2);
+    API.ambil('nilai_rekap', { id_pelatihan: idPel }, x => { if (host._id === idPel) { d = x; gambar(); } }, { el: host }).catch(e => UI.galat(host, e, () => this.rekapTes(host, idPel)));
   },
 
   // ===========================================================

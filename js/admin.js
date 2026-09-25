@@ -30,7 +30,7 @@ const Admin = {
     peserta: el => Admin.peserta(el),
     absensi: el => Admin.absensi(el),
     tugas: el => Kelola.halamanTugas(el, { judul: 'Tugas Peserta', atas: (h, id) => Admin.panelAktivitas(h, id, ['tugas']) }),
-    tes: el => Kelola.halamanSoal(el, { judul: 'Pre-Pos Test', atas: (h, id) => Admin.panelAktivitas(h, id, ['pre', 'post']) }),
+    tes: el => Kelola.halamanSoal(el, { judul: 'Pre-Pos Test', rekap: true, atas: (h, id) => Admin.panelAktivitas(h, id, ['pre', 'post']) }),
     evaluasi: el => Admin.evaluasi(el),
     sertifikat: el => Admin.sertifikat(el),
     laporan: el => Admin.laporan(el),
