@@ -212,9 +212,24 @@ const Kelola = {
           { name: 'opsi_e', label: 'Opsi E (opsional)', value: x.opsi_e },
           { name: 'kunci', label: 'Kunci jawaban', type: 'select', value: x.kunci, options: [['a', 'A'], ['b', 'B'], ['c', 'C'], ['d', 'D'], ['e', 'E']] }
         ],
+        latar: true, pesanSimpan: 'Menyimpan soal…',
+        cek: v => {
+          if (!v.pertanyaan) throw new Error('Pertanyaan wajib diisi.');
+          if (!v.opsi_a || !v.opsi_b || !v.opsi_c || !v.opsi_d) throw new Error('Opsi A sampai D wajib diisi (opsi E boleh kosong).');
+          if (!v['opsi_' + v.kunci]) throw new Error('Kunci jawaban ' + v.kunci.toUpperCase() + ' belum diisi opsinya.');
+        },
+        segera: v => {
+          const lama = data.soal.slice(), baru = Object.assign({}, x, v, { id_soal: x.id_soal || 'tmp-' + Date.now().toString(36) });
+          const i = data.soal.findIndex(y => y.id_soal === x.id_soal);
+          if (x.id_soal && i >= 0) data.soal[i] = baru; else data.soal.push(baru);
+          gambar();
+          return () => { data.soal = lama; gambar(); };
+        },
         onSubmit: async v => {
-          const r = await API.call('soal_simpan', { id_pelatihan: idPel, soal: Object.assign({ id_soal: x.id_soal }, v) });
-          UI.toast(r.message); muat();
+          const idA = idPel;
+          const r = await API.call('soal_simpan', { id_pelatihan: idA, soal: Object.assign({ id_soal: x.id_soal }, v) });
+          UI.toast(r.message);
+          API.call('soal_list', { id_pelatihan: idA }).then(d2 => { if (idA === idPel && isi.isConnected) { data = d2; gambar(); } }).catch(() => { });
         }
       });
     };
@@ -326,9 +341,20 @@ const Kelola = {
           { name: 'instruksi', label: 'Instruksi', type: 'textarea', value: t.instruksi, placeholder: 'Jelaskan apa yang harus dikumpulkan peserta (JPG/PNG/PDF, maks 10 MB).' },
           { name: 'batas_waktu', label: 'Batas waktu (opsional)', type: 'datetime-local', value: String(t.batas_waktu || '').slice(0, 16).replace(' ', 'T'), full: true }
         ],
+        latar: true, pesanSimpan: 'Menyimpan tugas…',
+        cek: v => { if (!v.judul) throw new Error('Judul tugas wajib diisi.'); if (!v.instruksi) throw new Error('Instruksi tugas wajib diisi.'); },
+        segera: v => {
+          const lama = data.tugas.slice(), baru = Object.assign({ jumlah_kumpul: 0, pelatihan: '' }, t, v, { batas_waktu: String(v.batas_waktu || '').replace('T', ' '), id_tugas: t.id_tugas || 'tmp-' + Date.now().toString(36) });
+          const i = data.tugas.findIndex(y => y.id_tugas === t.id_tugas);
+          if (t.id_tugas && i >= 0) data.tugas[i] = baru; else data.tugas.push(baru);
+          gambar();
+          return () => { data.tugas = lama; gambar(); };
+        },
         onSubmit: async v => {
           const r = await API.call('tugas_simpan', Object.assign({ id_pelatihan: t.id_pelatihan || idPel, id_tugas: t.id_tugas }, v));
-          UI.toast(r.message); muat();
+          UI.toast(r.message);
+          const idA = idPel;
+          API.call('tugas_list', idA ? { id_pelatihan: idA } : {}).then(d2 => { if (idA === idPel && isi.isConnected) { data = d2; gambar(); } }).catch(() => { });
         }
       });
     };

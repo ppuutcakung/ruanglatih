@@ -250,6 +250,8 @@ const Admin = {
         };
         form.addEventListener('change', atur);
       },
+      latar: !baru, pesanSimpan: 'Menyimpan perubahan pelatihan…',
+      cek: v => { if (!v.jumlah_hari) throw new Error('Pilih jumlah hari: 1 hari atau 2 hari.'); if (!v.judul) throw new Error('Judul pelatihan wajib diisi.'); },
       onSubmit: async v => {
         if (!v.jumlah_hari) throw new Error('Pilih jumlah hari: 1 hari atau 2 hari.');
         const r = await API.call('pelatihan_simpan', Object.assign({ id_pelatihan: p.id_pelatihan, id_draft: draft ? draft.id_draft : '' }, v));
@@ -304,17 +306,41 @@ const Admin = {
         SYARAT.forEach(s => sy[s[0]] = $('[name="sy_' + s[0] + '"]', isi).checked);
         try { await UI.sibuk(b, async () => { const r = await API.call('syarat_set', { id_pelatihan: id, syarat: sy }); UI.toast(r.message); }); muat(); } catch (e) { UI.gagal(e); }
       },
-      salinHp: b => UI.salin(b.dataset.hp)
+      salinHp: b => UI.salin(b.dataset.hp),
+      gantiPeserta: b => {
+        const x = d.peserta.find(y => y.id_umkm === b.dataset.id);
+        if (!x) return;
+        const lama = { nama_pemilik: x.nama_pemilik, perwakilan: x.perwakilan, no_hp: x.no_hp, gender_peserta: x.gender_peserta };
+        UI.form({
+          title: 'Ubah Peserta — ' + x.nama_umkm, submit: 'Simpan', latar: true, pesanSimpan: 'Menyimpan peserta…',
+          intro: '<div class="card well tight t-sm" style="margin-bottom:14px">Pemilik UMKM: <b>' + esc(x.pemilik) + '</b>. Isi nama karyawan/perwakilan bila yang ikut bukan pemilik; kosongkan untuk kembali ke pemilik.</div>',
+          fields: [
+            { name: 'nama_peserta', label: 'Nama peserta yang ikut', full: true, value: x.perwakilan ? x.nama_pemilik : '', placeholder: x.pemilik },
+            { name: 'gender', label: 'Gender', type: 'seg', value: x.perwakilan ? x.gender_peserta : '', options: [['Laki-laki', 'Laki-laki'], ['Perempuan', 'Perempuan']] },
+            { name: 'no_hp', label: 'No. WhatsApp peserta (opsional)', type: 'tel', value: x.hp_peserta || '', attrs: 'inputmode="tel"' }
+          ],
+          cek: v => { if (v.no_hp && !/^(\+?62|0)8\d{7,12}$/.test(v.no_hp.replace(/[\s-]/g, ''))) throw new Error('Nomor WhatsApp tidak valid.'); },
+          segera: v => {
+            const kn = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            const wakil = !!v.nama_peserta && kn(v.nama_peserta) !== kn(x.pemilik);
+            Object.assign(x, { nama_pemilik: wakil ? v.nama_peserta : x.pemilik, perwakilan: wakil, gender_peserta: wakil ? v.gender : '', hp_peserta: wakil ? v.no_hp : '' });
+            gambar();
+            return () => { Object.assign(x, lama); gambar(); };
+          },
+          onSubmit: async v => { const r = await API.call('peserta_ubah', { id_pelatihan: id, id_umkm: x.id_umkm, nama_peserta: v.nama_peserta, gender: v.gender, no_hp: v.no_hp }); UI.toast(r.message); }
+        });
+      }
     });
     muat();
   },
 
   pTab_peserta(d) {
     const p = d.pelatihan;
-    return '<div class="card"><div class="card-h"><div class="h-sm">Daftar Peserta</div><button class="btn primary sm" data-aksi="daftar">' + UI.ic('plus', 'sm') + 'Daftarkan UMKM</button></div>' +
+    return '<div class="card"><div class="card-h"><div class="h-sm">Daftar Peserta</div><button class="btn primary sm" data-aksi="daftar">' + UI.ic('plus', 'sm') + 'Daftarkan Peserta</button></div>' +
       (d.peserta.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>No. HP</th>' + p.tanggal_hari.map((t, i) => '<th class="center">H' + (i + 1) + '</th>').join('') +
         '<th class="num">Pre</th><th class="num">Post</th><th class="num">Tugas</th><th class="center">Eval</th><th>Status</th><th></th></tr></thead><tbody>' +
-        d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + ' · ' + esc(x.sektor) + '</div></td>' +
+        d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted row g4 wrap">' + UI.ic('user', 'sm') + '<span>' + esc(x.nama_pemilik) + '</span>' + (x.perwakilan ? '<span class="chip info sm" title="Pemilik: ' + esc(x.pemilik) + '">perwakilan</span>' : '') + '<span>· ' + esc(x.sektor) + '</span>' +
+          '<button class="link t-xs" data-aksi="gantiPeserta" data-id="' + esc(x.id_umkm) + '">' + UI.ic('edit', 'sm') + 'ubah peserta</button></div></td>' +
           '<td><button class="link" data-aksi="salinHp" data-hp="' + esc(x.no_hp) + '">' + esc(x.no_hp) + '</button></td>' +
           p.tanggal_hari.map((t, i) => '<td class="center">' + (x.absen[i + 1] ? '<span class="c-ok" title="' + esc(x.absen[i + 1]) + '">' + UI.ic('checkCircle', 'sm') + '</span>' : '<span class="faint">–</span>') + '</td>').join('') +
           '<td class="num">' + UI.angka(x.pre) + '</td><td class="num">' + UI.angka(x.post) + '</td><td class="num">' + x.tugas_kumpul + '/' + x.tugas_total + (x.skor_tugas !== null ? ' <span class="t-xs muted">(' + UI.angka(x.skor_tugas) + ')</span>' : '') + '</td>' +
@@ -322,7 +348,7 @@ const Admin = {
           '<td><span title="' + esc(x.kurang.join(' · ')) + '">' + UI.chipLulus(x.lulus) + '</span>' + (x.sertifikat_terbit ? ' <span class="chip info sm">' + UI.ic('award', 'sm') + '</span>' : '') + '</td>' +
           '<td><button class="btn icon sm ghost" data-aksi="keluar" data-id="' + esc(x.id_umkm) + '" data-n="' + esc(x.nama_umkm) + '" title="Keluarkan">' + UI.ic('x', 'sm') + '</button></td></tr>').join('') +
         '</tbody></table></div><div class="hint mt8">Arahkan kursor ke status untuk melihat syarat yang belum terpenuhi.</div>'
-        : UI.kosong('Belum ada peserta. Daftarkan UMKM binaan ke pelatihan ini.', 'users')) + '</div>';
+        : UI.kosong('Belum ada peserta. Daftarkan UMKM binaan (pemilik atau karyawannya) ke pelatihan ini.', 'users')) + '</div>';
   },
   pTab_aktivitas(d) {
     const p = d.pelatihan;
@@ -363,77 +389,139 @@ const Admin = {
     const ada = {};
     d.peserta.forEach(x => ada[x.id_umkm] = true);
     const sisa = p.kuota - d.peserta.length;
-    const m = UI.modal({ title: 'Daftarkan UMKM', wide: true, body: '<div data-b></div>', foot: '<span class="t-sm muted grow" data-info></span><button class="btn outline" data-tutup>Batal</button><button class="btn primary" data-kirim disabled>Daftarkan</button>' });
+    const m = UI.modal({ title: 'Daftarkan Peserta', wide: true, body: '<div data-b></div>', foot: '<span class="t-sm muted grow" data-info></span><button class="btn outline" data-tutup>Batal</button><button class="btn primary" data-kirim disabled>Daftarkan</button>' });
     const box = $('[data-b]', m.el);
     UI.loading(box, 2);
     let umkm;
-    try { umkm = (await API.cepat('umkm_list')).filter(u => u.status_akun === 'aktif' && !ada[u.id_umkm]); } catch (e) { return UI.galat(box, e); }
-    const pilih = {};
+    try { umkm = (await API.cepat('umkm_list')).filter(u => u.status_akun === 'aktif' && !ada[u.id_umkm]).map(u => Object.assign({}, u)); } catch (e) { return UI.galat(box, e); }
+    const pilih = {}, wakil = {}; // wakil[id] = { nama_peserta, gender, no_hp } — boleh karyawan/perwakilan
     let q = '', sek = p.cakupan === 'sektor' ? p.sektor : '';
     const info = $('[data-info]', m.el), kirim = $('[data-kirim]', m.el);
-    const cocok = u => (!sek || u.sektor === sek) && (!q || (u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp).toLowerCase().indexOf(q) >= 0);
-    const hitung = () => { const n = Object.keys(pilih).length; info.textContent = n + ' dipilih · sisa kuota ' + sisa; kirim.disabled = !n || n > sisa; info.style.color = n > sisa ? 'var(--bad)' : ''; };
+    const cocok = u => pilih[u.id_umkm] || ((!sek || u.sektor === sek) && (!q || (u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp).toLowerCase().indexOf(q) >= 0));
+    const hitung = () => {
+      const n = Object.keys(pilih).length, tunggu = umkm.some(u => u._kirim && pilih[u.id_umkm]);
+      info.textContent = tunggu ? 'Menunggu data UMKM baru tersimpan…' : n + ' dipilih · sisa kuota ' + sisa;
+      kirim.disabled = !n || n > sisa || tunggu; info.style.color = n > sisa ? 'var(--bad)' : '';
+    };
     const gambar = () => {
-      const t = umkm.filter(cocok);
-      $('[data-l]', box).innerHTML = t.length ? t.map(u => '<label class="item" style="cursor:pointer;padding:10px 14px' + (u._baru ? ';border-color:var(--ok);background:var(--ok-bg)' : '') + '"><input type="checkbox" data-id="' + esc(u.id_umkm) + '"' + (pilih[u.id_umkm] ? ' checked' : '') + ' style="width:20px;height:20px;accent-color:var(--primary)"><div class="grow"><div class="semi t-sm">' + esc(u.nama_umkm) + (u._baru ? ' <span class="chip ok sm">Baru</span>' : '') + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + (u.gender ? ' (' + esc(u.gender === 'Perempuan' ? 'P' : 'L') + ')' : '') + ' · ' + esc(u.sektor) + ' · ' + esc(u.no_hp) + '</div></div><span class="t-xs muted">' + (u._baru ? 'PIN awal ' + esc(u.pin) : u.jumlah_pelatihan + ' pelatihan') + '</span></label>').join('')
-        : UI.kosong('Tidak ada UMKM aktif yang cocok (atau semua sudah terdaftar).', 'users', '<button class="btn secondary sm" data-baruumkm>' + UI.ic('plus', 'sm') + 'Tambah UMKM Baru</button>');
+      const t = umkm.filter(cocok).sort((a, b) => (!!pilih[b.id_umkm] - !!pilih[a.id_umkm]) || (!!b._baru - !!a._baru) || a.nama_umkm.localeCompare(b.nama_umkm));
+      $('[data-l]', box).innerHTML = t.length ? t.map(u => {
+        const on = !!pilih[u.id_umkm], w = wakil[u.id_umkm] || {};
+        return '<div class="item" style="flex-direction:column;align-items:stretch;padding:10px 14px' + (u._baru ? ';border-color:var(--ok);background:var(--ok-bg)' : (on ? ';border-color:var(--primary)' : '')) + '">' +
+          '<label class="row" style="cursor:pointer"><input type="checkbox" data-id="' + esc(u.id_umkm) + '"' + (on ? ' checked' : '') + ' style="width:20px;height:20px;accent-color:var(--primary)"><div class="grow"><div class="semi t-sm">' + esc(u.nama_umkm) + (u._baru ? ' <span class="chip ok sm">Baru</span>' : '') + (u._kirim ? ' <span class="chip warn sm">Menyimpan…</span>' : '') + '</div>' +
+          '<div class="t-xs muted">Pemilik: ' + esc(u.nama_pemilik) + ' · ' + esc(u.sektor) + ' · ' + esc(u.no_hp) + '</div></div><span class="t-xs muted">' + (u._baru ? 'PIN awal ' + esc(u.pin) : u.jumlah_pelatihan + ' pelatihan') + '</span></label>' +
+          (on ? '<div class="row wrap g8 mt8" style="padding-left:30px"><div class="field grow" style="min-width:180px;gap:4px"><span class="t-xs semi muted">Nama peserta yang ikut</span><input class="input" style="height:38px" data-w="nama_peserta" data-u="' + esc(u.id_umkm) + '" value="' + esc(w.nama_peserta !== undefined ? w.nama_peserta : u.nama_pemilik) + '" placeholder="' + esc(u.nama_pemilik) + '"></div>' +
+            '<div class="field" style="gap:4px"><span class="t-xs semi muted">Gender</span><select class="select" style="height:38px;width:auto" data-w="gender" data-u="' + esc(u.id_umkm) + '"><option value="">–</option>' + ['Laki-laki', 'Perempuan'].map(g => '<option' + ((w.gender || (w.nama_peserta === undefined ? u.gender : '')) === g ? ' selected' : '') + '>' + g + '</option>').join('') + '</select></div>' +
+            '<div class="field" style="min-width:150px;gap:4px"><span class="t-xs semi muted">No. WA peserta (opsional)</span><input class="input" style="height:38px" type="tel" inputmode="tel" data-w="no_hp" data-u="' + esc(u.id_umkm) + '" value="' + esc(w.no_hp || '') + '" placeholder="bila karyawan"></div></div>' : '') + '</div>';
+      }).join('') : UI.kosong('Tidak ada UMKM aktif yang cocok (atau semua sudah terdaftar).', 'users', '<button class="btn secondary sm" data-baruumkm>' + UI.ic('plus', 'sm') + 'Tambah UMKM Baru</button>');
       hitung();
     };
-    box.innerHTML = '<div class="card well tight row wrap between" style="margin-bottom:14px"><div class="row g8"><div class="ic-tile sm">' + UI.ic('store', 'sm') + '</div><div><div class="semi t-sm">UMKM belum ada di daftar?</div><div class="t-xs muted">Tambahkan peserta baru, langsung terpilih untuk pelatihan ini.</div></div></div>' +
-      '<button class="btn primary sm" data-baruumkm>' + UI.ic('plus', 'sm') + 'Tambah UMKM Baru</button></div>' +
+    box.innerHTML = '<div class="card well tight" style="margin-bottom:14px"><div class="t-sm"><b>Peserta boleh karyawan/perwakilan UMKM.</b> Centang UMKM-nya, lalu ubah <i>Nama peserta yang ikut</i> bila bukan pemilik. Peserta tetap tercatat atas nama UMKM tersebut.</div>' +
+      '<div class="row wrap g8 mt12"><button class="btn primary sm" data-wakil>' + UI.ic('users', 'sm') + 'Tambah Peserta dari UMKM Terdaftar</button><button class="btn secondary sm" data-baruumkm>' + UI.ic('plus', 'sm') + 'UMKM Baru</button></div></div>' +
       '<div class="row wrap"><div class="input-ic grow" style="min-width:220px">' + UI.ic('search', 'sm') + '<input class="input" style="height:42px" placeholder="Cari nama UMKM, pemilik, atau HP…" data-q></div>' +
       '<select class="select" style="height:42px;width:auto" data-s><option value="">Semua sektor</option>' + SEKTOR.map(s => '<option' + (s === sek ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>' +
-      '<button class="btn outline sm" data-semua>Pilih semua yang tampil</button></div><div class="list mt12" data-l style="max-height:50vh;overflow:auto"></div>';
+      '<button class="btn outline sm" data-semua>Pilih semua yang tampil</button></div><div class="list mt12" data-l style="max-height:52vh;overflow:auto"></div>';
     $('[data-q]', box).oninput = e => { q = e.target.value.toLowerCase(); gambar(); };
     $('[data-s]', box).onchange = e => { sek = e.target.value; gambar(); };
-    $('[data-semua]', box).onclick = () => { umkm.filter(cocok).forEach(u => pilih[u.id_umkm] = true); gambar(); };
+    $('[data-semua]', box).onclick = () => { umkm.filter(cocok).forEach(u => { if (!u._kirim) pilih[u.id_umkm] = true; }); gambar(); };
+    // Tambah peserta (perwakilan/karyawan) dari UMKM yang sudah terdaftar
+    $('[data-wakil]', box).onclick = () => {
+      const opsi = umkm.filter(u => !u._kirim).sort((a, b) => a.nama_umkm.localeCompare(b.nama_umkm));
+      if (!opsi.length) return UI.toast('Semua UMKM aktif sudah terdaftar di pelatihan ini.', 'info');
+      UI.form({
+        title: 'Tambah Peserta dari UMKM Terdaftar', submit: 'Tambahkan',
+        intro: '<div class="card well tight t-sm" style="margin-bottom:14px">Pilih UMKM/usaha yang sudah ada, lalu isi nama orang yang diutus mengikuti pelatihan ini (boleh karyawan).</div>',
+        fields: [
+          { name: 'id_umkm', label: 'UMKM / Usaha', type: 'select', full: true, value: '', options: [['', '— Pilih UMKM —']].concat(opsi.map(u => [u.id_umkm, u.nama_umkm + ' · ' + u.sektor + ' (pemilik: ' + u.nama_pemilik + ')'])) },
+          { name: 'nama_peserta', label: 'Nama Peserta', full: true, placeholder: 'Nama karyawan / perwakilan yang ikut' },
+          { name: 'gender', label: 'Gender', type: 'seg', value: '', options: [['Laki-laki', 'Laki-laki'], ['Perempuan', 'Perempuan']] },
+          { name: 'no_hp', label: 'No. WhatsApp peserta (opsional)', type: 'tel', placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel"' }
+        ],
+        onSubmit: async v => {
+          if (!v.id_umkm) throw new Error('Pilih UMKM / usaha.');
+          if (!v.nama_peserta) throw new Error('Isi nama peserta.');
+          if (v.no_hp && !/^(\+?62|0)8\d{7,12}$/.test(v.no_hp.replace(/[\s-]/g, ''))) throw new Error('Nomor WhatsApp tidak valid.');
+          pilih[v.id_umkm] = true;
+          wakil[v.id_umkm] = { nama_peserta: v.nama_peserta, gender: v.gender, no_hp: v.no_hp };
+          q = ''; $('[data-q]', box).value = '';
+          gambar();
+          UI.toast(v.nama_peserta + ' ditambahkan sebagai peserta ' + opsi.find(u => u.id_umkm === v.id_umkm).nama_umkm + '. Klik Daftarkan untuk menyimpan.', 'info');
+        }
+      });
+    };
     box.addEventListener('click', e => {
       if (!e.target.closest('[data-baruumkm]')) return;
-      this.formUmkmBaru(p.cakupan === 'sektor' ? p.sektor : '', u => {
-        umkm.unshift(Object.assign(u, { _baru: true }));
-        pilih[u.id_umkm] = true;
-        q = ''; sek = ''; $('[data-q]', box).value = ''; $('[data-s]', box).value = '';
-        gambar();
+      this.formUmkm(null, { sektorAwal: p.cakupan === 'sektor' ? p.sektor : '', submit: 'Simpan & Pilih' }, {
+        segera: obj => { obj._baru = true; umkm.unshift(obj); pilih[obj.id_umkm] = true; q = ''; sek = ''; $('[data-q]', box).value = ''; $('[data-s]', box).value = ''; gambar(); return () => { umkm = umkm.filter(x => x !== obj); delete pilih[obj.id_umkm]; gambar(); }; },
+        selesai: obj => { if (obj.id_lama && pilih[obj.id_lama]) { delete pilih[obj.id_lama]; pilih[obj.id_umkm] = true; if (wakil[obj.id_lama]) { wakil[obj.id_umkm] = wakil[obj.id_lama]; delete wakil[obj.id_lama]; } } if (m.el.isConnected) gambar(); }
       });
     });
-    $('[data-l]', box).onchange = e => { const id = e.target.dataset.id; if (!id) return; if (e.target.checked) pilih[id] = true; else delete pilih[id]; hitung(); };
+    $('[data-l]', box).addEventListener('change', e => {
+      const id = e.target.dataset.id;
+      if (id) { if (e.target.checked) pilih[id] = true; else delete pilih[id]; gambar(); return; }
+      const u = e.target.dataset.u, k = e.target.dataset.w;
+      if (u && k) { wakil[u] = wakil[u] || {}; wakil[u][k] = e.target.value.trim(); }
+    });
+    $('[data-l]', box).addEventListener('input', e => { const u = e.target.dataset.u, k = e.target.dataset.w; if (u && k) { wakil[u] = wakil[u] || {}; wakil[u][k] = e.target.value; } });
     kirim.onclick = async () => {
-      try { await UI.sibuk(kirim, async () => { const r = await API.call('peserta_daftarkan', { id_pelatihan: p.id_pelatihan, ids: Object.keys(pilih) }); UI.toast(r.message); }); m.close(); Kelola.segarkanPel(); sesudah(); } catch (e) { UI.gagal(e); }
+      const peserta = Object.keys(pilih).map(id => { const w = wakil[id] || {}, u = umkm.find(x => x.id_umkm === id) || {};
+        return { id_umkm: id, nama_peserta: (w.nama_peserta !== undefined ? w.nama_peserta : u.nama_pemilik || '').trim(), gender: w.gender || (w.nama_peserta === undefined ? u.gender : '') || '', no_hp: (w.no_hp || '').trim() }; });
+      const salahHp = peserta.find(x => x.no_hp && !/^(\+?62|0)8\d{7,12}$/.test(x.no_hp.replace(/[\s-]/g, '')));
+      if (salahHp) return UI.toast('Nomor WA peserta ' + (salahHp.nama_peserta || '') + ' tidak valid.', 'bad');
+      try { await UI.sibuk(kirim, async () => { const r = await API.call('peserta_daftarkan', { id_pelatihan: p.id_pelatihan, peserta: peserta }); UI.toast(r.message); }, 'Menyimpan…'); m.close(); sesudah(); } catch (e) { UI.gagal(e); }
     };
     gambar();
   },
 
+
   /** Form UMKM (tambah/ubah). Dipakai di tab Peserta dan di "Daftarkan UMKM". */
-  formUmkm(u, opt, selesai) {
+  formUmkm(u, opt, aksi) {
     opt = opt || {};
+    if (typeof aksi === 'function') aksi = { selesai: aksi };
+    aksi = aksi || {};
     const ubah = !!(u && u.id_umkm);
     u = u || {};
+    let obj = null, cadangan = null;
+    const hpNorm = v => v.no_hp.replace(/\D/g, '').replace(/^62/, '0');
     UI.form({
       title: ubah ? 'Ubah Data UMKM' : 'Tambah UMKM Baru', wide: true, submit: opt.submit || (ubah ? 'Simpan Perubahan' : 'Simpan'),
+      latar: true, pesanSimpan: 'Menyimpan data UMKM…',
       fields: [
-        { name: 'nama_umkm', label: 'Nama UMKM / Usaha', value: u.nama_umkm, full: true, placeholder: 'mis. Dapur Bunda Lia', hint: 'Dipakai peserta untuk masuk aplikasi, jadi harus berbeda dari UMKM lain.' },
-        { name: 'nama_pemilik', label: 'Nama Peserta', value: u.nama_pemilik, placeholder: 'Pemilik / perwakilan yang ikut pelatihan' },
+        { name: 'nama_umkm', label: 'Nama UMKM / Usaha', value: u.nama_umkm, full: true, placeholder: 'mis. Dapur Bunda Lia', hint: 'Dipakai untuk masuk aplikasi, jadi harus berbeda dari UMKM lain.' },
+        { name: 'nama_pemilik', label: 'Nama Pemilik / Peserta Utama', value: u.nama_pemilik, placeholder: 'Nama pemilik usaha' },
         { name: 'gender', label: 'Gender', type: 'seg', value: u.gender || '', options: [['Laki-laki', 'Laki-laki'], ['Perempuan', 'Perempuan']] },
         { name: 'no_hp', label: 'Nomor WhatsApp', type: 'tel', value: u.no_hp, placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel" autocomplete="off"' },
         { name: 'spesialisasi', label: 'Produk / spesialisasi (opsional)', value: u.spesialisasi, placeholder: 'mis. Keripik singkong' },
         { name: 'sektor', label: 'Sektor Usaha', type: 'seg', value: u.sektor || opt.sektorAwal || '', options: SEKTOR.map(x => [x, x]), full: true },
         { name: 'alamat', label: 'Alamat Singkat', value: u.alamat, full: true, placeholder: 'mis. Jl. Cakung Raya No. 12, Cakung Barat' }
       ],
-      onSubmit: async v => {
+      cek: v => {
         if (!v.nama_umkm) throw new Error('Nama UMKM / usaha wajib diisi.');
-        if (!v.nama_pemilik) throw new Error('Nama peserta wajib diisi.');
-        if (!v.gender) throw new Error('Pilih gender peserta.');
+        if (!v.nama_pemilik) throw new Error('Nama pemilik wajib diisi.');
+        if (!v.gender) throw new Error('Pilih gender.');
         if (!/^(\+?62|0)8\d{7,12}$/.test(v.no_hp.replace(/[\s-]/g, ''))) throw new Error('Nomor WhatsApp tidak valid (contoh 081234567890).');
         if (!v.sektor) throw new Error('Pilih sektor usaha.');
-        const r = await API.call('umkm_simpan', Object.assign({ id_umkm: u.id_umkm, gender_wajib: true }, v));
-        const hp = v.no_hp.replace(/\D/g, '').replace(/^62/, '0');
-        const hasil = Object.assign({}, u, v, { no_hp: hp }, ubah ? {} : { id_umkm: r.id_umkm, pin: r.pin, status_akun: 'aktif', wajib_ganti_pin: 'ya', jumlah_pelatihan: 0 });
-        UI.toast(ubah ? 'Data ' + v.nama_umkm + ' diperbarui.' : v.nama_umkm + ' ditambahkan · PIN awal ' + r.pin);
-        selesai && selesai(hasil, r);
+        const kn = n => String(n || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const c = Simpan.get(Simpan.kunci('umkm_list', {}));
+        const dup = c && c.d.find(x => kn(x.nama_umkm) === kn(v.nama_umkm) && x.id_umkm !== u.id_umkm);
+        if (dup) throw new Error('Nama UMKM "' + v.nama_umkm + '" sudah dipakai (' + dup.nama_pemilik + '). Tambahkan nama pemilik atau lokasi agar berbeda.');
+      },
+      segera: v => {
+        if (ubah) { cadangan = Object.assign({}, u); Object.assign(u, v, { no_hp: hpNorm(v), _kirim: true }); obj = u; }
+        else obj = Object.assign({ id_umkm: 'tmp-' + Date.now().toString(36), pin: '····', status_akun: 'aktif', wajib_ganti_pin: 'ya', jumlah_pelatihan: 0 }, v, { no_hp: hpNorm(v), _kirim: true });
+        const batalLuar = aksi.segera ? aksi.segera(obj) : null;
+        return () => { if (ubah) { Object.keys(u).forEach(k => delete u[k]); Object.assign(u, cadangan); } if (batalLuar) batalLuar(); };
+      },
+      onSubmit: async v => {
+        const r = await API.call('umkm_simpan', Object.assign({ id_umkm: ubah ? u.id_umkm : undefined, gender_wajib: true }, v));
+        delete obj._kirim;
+        if (!ubah) { obj.id_lama = obj.id_umkm; obj.id_umkm = r.id_umkm; obj.pin = r.pin; }
+        UI.toast(ubah ? 'Data ' + v.nama_umkm + ' tersimpan.' : v.nama_umkm + ' tersimpan · PIN awal ' + r.pin + '. Kirim info akses dari Manajemen Akses.');
+        aksi.selesai && aksi.selesai(obj, r);
       }
     });
   },
-  formUmkmBaru(sektorAwal, selesai) { this.formUmkm(null, { sektorAwal: sektorAwal, submit: 'Simpan & Pilih' }, selesai); },
+
 
   waNomor(hp) { hp = String(hp || '').replace(/\D/g, ''); return hp.indexOf('0') === 0 ? '62' + hp.slice(1) : hp; },
   linkWaKe(hp, teks) { return 'https://wa.me/' + this.waNomor(hp) + (teks ? '?text=' + encodeURIComponent(teks) : ''); },
@@ -479,7 +567,7 @@ const Admin = {
         .map(x => '<div class="card stat"><span class="l">' + x[0] + '</span><span class="v ' + x[2] + '">' + x[1] + '</span></div>').join('');
       const t = rows.filter(i => !q || (i.nama + ' ' + i.institusi + ' ' + i.no_hp).toLowerCase().indexOf(q) >= 0);
       $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nama</th><th>Institusi</th><th>Nomor HP</th><th class="num">Pelatihan</th><th>Status</th><th></th></tr></thead><tbody>' +
-        t.map(i => '<tr style="cursor:pointer" data-buka="' + esc(i.id_instruktur) + '"><td><div class="row g8"><div class="ic-tile sm solid" style="width:34px;height:34px;font-size:12px;font-weight:700">' + esc(UI.inisial(i.nama)) + '</div><span class="semi">' + esc(i.nama) + '</span></div></td>' +
+        t.map(i => '<tr style="cursor:pointer' + (i._kirim ? ';opacity:.7' : '') + '" data-buka="' + esc(i.id_instruktur) + '"><td><div class="row g8"><div class="ic-tile sm solid" style="width:34px;height:34px;font-size:12px;font-weight:700">' + esc(UI.inisial(i.nama)) + '</div><span class="semi">' + esc(i.nama) + '</span>' + (i._kirim ? '<span class="chip warn sm">Menyimpan…</span>' : '') + '</div></td>' +
           '<td>' + (i.institusi ? esc(i.institusi) : '<span class="faint">–</span>') + '</td><td>' + (i.no_hp ? '<a href="' + this.linkWaKe(i.no_hp) + '" target="_blank" rel="noopener" data-stop>' + esc(i.no_hp) + '</a>' : '<span class="faint">–</span>') + '</td>' +
           '<td class="num">' + i.jumlah_pelatihan + '</td><td>' + (i.status === 'aktif' ? '<span class="chip ok dot sm">Aktif</span>' : '<span class="chip info sm">Nonaktif</span>') + '</td>' +
           '<td><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(i.id_instruktur) + '" title="Ubah data">' + UI.ic('edit', 'sm') + '</button></td></tr>').join('') + '</tbody></table></div><div class="hint mt8">Klik baris untuk melihat rincian & riwayat mengajar. Kode akses dan status akun diatur di menu Manajemen Akses.</div>'
@@ -490,28 +578,43 @@ const Admin = {
       try { await API.ambil('instruktur_list', {}, x => { rows = x; gambar(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
     };
     const form = i => {
+      const ubah = !!(i && i.id_instruktur);
       i = i || {};
+      let obj = null, cadangan = null;
       UI.form({
-        title: i.id_instruktur ? 'Ubah Data Instruktur' : 'Tambah Instruktur', submit: 'Simpan',
-        intro: i.id_instruktur ? '' : '<div class="card well tight t-sm" style="margin-bottom:16px">Kode akses untuk masuk dibuat otomatis setelah disimpan dan bisa langsung dikirim via WhatsApp.</div>',
+        title: ubah ? 'Ubah Data Instruktur' : 'Tambah Instruktur', submit: 'Simpan', latar: true, pesanSimpan: 'Menyimpan data instruktur…',
+        intro: ubah ? '' : '<div class="card well tight t-sm" style="margin-bottom:16px">Kode akses dibuat otomatis. Kirim ke instruktur secara manual dari <b>Manajemen Akses → Akun Instruktur</b> (tombol WhatsApp).</div>',
         fields: [
           { name: 'nama', label: 'Nama lengkap (dipakai saat masuk)', value: i.nama, full: true },
           { name: 'institusi', label: 'Institusi', value: i.institusi, full: true, placeholder: 'mis. Politeknik Kreatif Jakarta, Dinas KUKM, praktisi mandiri' },
           { name: 'no_hp', label: 'Nomor HP / WhatsApp', type: 'tel', value: i.no_hp, full: true, placeholder: '08xxxxxxxxxx', attrs: 'inputmode="tel"' }
         ],
-        onSubmit: async v => {
+        cek: v => {
+          if (!v.nama) throw new Error('Nama instruktur wajib diisi.');
           if (v.no_hp && !/^(\+?62|0)8\d{7,12}$/.test(v.no_hp.replace(/[\s-]/g, ''))) throw new Error('Nomor HP tidak valid (contoh 081234567890).');
-          const r = await API.call('instruktur_simpan', Object.assign({ id_instruktur: i.id_instruktur }, v));
-          if (i.id_instruktur) { Object.assign(i, v); gambar(); UI.toast(r.message); }
-          else { rows.push(Object.assign({ id_instruktur: r.id_instruktur, kode_akses: r.kode_akses, status: 'aktif', jumlah_pelatihan: 0 }, v)); gambar(); this.tampilKode(v, r.kode_akses, 'Instruktur ditambahkan'); }
+        },
+        segera: v => {
+          if (ubah) { cadangan = Object.assign({}, i); Object.assign(i, v, { _kirim: true }); obj = i; }
+          else { obj = Object.assign({ id_instruktur: 'tmp-' + Date.now().toString(36), kode_akses: '…', status: 'aktif', jumlah_pelatihan: 0, _kirim: true }, v); rows.push(obj); }
+          gambar();
+          return () => { if (ubah) { Object.keys(i).forEach(k => delete i[k]); Object.assign(i, cadangan); } else rows = rows.filter(x => x !== obj); gambar(); };
+        },
+        onSubmit: async v => {
+          const r = await API.call('instruktur_simpan', Object.assign({ id_instruktur: ubah ? i.id_instruktur : undefined }, v));
+          delete obj._kirim;
+          if (!ubah) { obj.id_instruktur = r.id_instruktur; obj.kode_akses = r.kode_akses; }
+          if (isi.isConnected) gambar();
+          UI.toast(ubah ? 'Data ' + v.nama + ' tersimpan.' : v.nama + ' tersimpan. Kode akses dibuat — kirim dari Manajemen Akses → Akun Instruktur.');
         }
       });
     };
-    UI.klik(el, { baru: () => form(), ubah: b => form(rows.find(i => i.id_instruktur === b.dataset.id)) });
+
+    UI.klik(el, { baru: () => form(), ubah: b => { const ins = rows.find(i => i.id_instruktur === b.dataset.id); if (ins && !ins._kirim) form(ins); } });
     isi.addEventListener('click', e => {
       if (e.target.closest('[data-aksi],[data-stop]')) return;
       const r = e.target.closest('[data-buka]');
-      if (r) this.detailInstruktur(rows.find(i => i.id_instruktur === r.dataset.buka), () => form(rows.find(i => i.id_instruktur === r.dataset.buka)));
+      const ins = r && rows.find(i => i.id_instruktur === r.dataset.buka);
+      if (ins && !ins._kirim) this.detailInstruktur(ins, () => form(ins));
     });
     muat();
   },
@@ -548,10 +651,10 @@ const Admin = {
       const t = rows.filter(u => (!sek || u.sektor === sek) && (!q || (u.nama_umkm + ' ' + u.nama_pemilik + ' ' + u.no_hp + ' ' + u.spesialisasi + ' ' + u.alamat).toLowerCase().indexOf(q) >= 0))
         .sort(urut === 'pelatihan' ? (a, b) => b.jumlah_pelatihan - a.jumlah_pelatihan || a.nama_umkm.localeCompare(b.nama_umkm) : (a, b) => a.nama_umkm.localeCompare(b.nama_umkm));
       $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>No. WhatsApp</th><th>Alamat</th><th class="num">Pelatihan diikuti</th><th></th></tr></thead><tbody>' +
-        t.slice((hal - 1) * per, hal * per).map(u => '<tr style="cursor:pointer" data-buka="' + esc(u.id_umkm) + '"><td><div class="semi">' + esc(u.nama_umkm) + (u.status_akun !== 'aktif' ? ' <span class="chip bad sm">Nonaktif</span>' : '') + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + (u.gender ? ' (' + (u.gender === 'Perempuan' ? 'P' : 'L') + ')' : '') + (u.spesialisasi ? ' · ' + esc(u.spesialisasi) : '') + '</div></td>' +
+        t.slice((hal - 1) * per, hal * per).map(u => '<tr style="cursor:pointer' + (u._kirim ? ';opacity:.7' : '') + '" data-buka="' + esc(u.id_umkm) + '"><td><div class="semi">' + esc(u.nama_umkm) + (u._kirim ? ' <span class="chip warn sm">Menyimpan…</span>' : '') + (u.status_akun !== 'aktif' ? ' <span class="chip bad sm">Nonaktif</span>' : '') + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + (u.gender ? ' (' + (u.gender === 'Perempuan' ? 'P' : 'L') + ')' : '') + (u.spesialisasi ? ' · ' + esc(u.spesialisasi) : '') + '</div></td>' +
           '<td>' + esc(u.sektor) + '</td><td>' + esc(u.no_hp) + '</td><td><div class="t-sm clamp1" style="max-width:220px">' + (u.alamat ? esc(u.alamat) : '<span class="faint">–</span>') + '</div></td>' +
           '<td class="num"><span class="chip ' + (u.jumlah_pelatihan ? 'solid' : 'line') + ' sm">' + u.jumlah_pelatihan + ' pelatihan</span></td>' +
-          '<td><div class="row g4"><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(u.id_umkm) + '" title="Ubah data">' + UI.ic('edit', 'sm') + '</button>' + UI.ic('chevR', 'sm') + '</div></td></tr>').join('') +
+          '<td><div class="row g4"><button class="btn icon sm secondary" data-aksi="ubah" data-id="' + esc(u.id_umkm) + '" title="Ubah data"' + (u._kirim ? ' disabled' : '') + '>' + UI.ic('edit', 'sm') + '</button>' + UI.ic('chevR', 'sm') + '</div></td></tr>').join('') +
         '</tbody></table></div>' + UI.halaman(t.length, hal, per) + '<div class="hint mt8">Klik baris untuk melihat rincian pelatihan yang pernah diikuti. PIN & status akun diatur di menu Manajemen Akses.</div>'
         : UI.kosong(rows.length ? 'Tidak ada UMKM yang cocok.' : 'Belum ada data UMKM. Tambah satu per satu atau impor dari Excel.', 'users');
     };
@@ -576,15 +679,15 @@ const Admin = {
       try { await API.ambil('umkm_list', {}, x => { rows = x; pasang(); }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
     };
     UI.klik(el, {
-      baru: () => this.formUmkm(null, {}, (u, r) => { rows.push(u); pasang(); this.tampilPin(u, r.pin, 'UMKM ditambahkan'); }),
-      ubah: b => { const u = rows.find(x => x.id_umkm === b.dataset.id); this.formUmkm(u, {}, x => { Object.assign(u, x); pasang(); }); },
+      baru: () => this.formUmkm(null, {}, { segera: o => { rows.push(o); pasang(); return () => { rows = rows.filter(x => x !== o); pasang(); }; }, selesai: () => { if (isi.isConnected) pasang(); } }),
+      ubah: b => { const u = rows.find(x => x.id_umkm === b.dataset.id); this.formUmkm(u, {}, { segera: () => { pasang(); return () => pasang(); }, selesai: () => { if (isi.isConnected) pasang(); } }); },
       hal: b => { hal = +b.dataset.h; gambar(); },
       impor: () => this.modalImpor(muat)
     });
     isi.addEventListener('click', e => {
       if (e.target.closest('[data-aksi]')) return;
       const r = e.target.closest('[data-buka]');
-      if (r) { const u = rows.find(x => x.id_umkm === r.dataset.buka); this.detailUmkm(u, () => this.formUmkm(u, {}, x => { Object.assign(u, x); pasang(); })); }
+      if (r) { const u = rows.find(x => x.id_umkm === r.dataset.buka); if (u && !u._kirim) this.detailUmkm(u, () => this.formUmkm(u, {}, { segera: () => { pasang(); return () => pasang(); }, selesai: () => { if (isi.isConnected) pasang(); } })); }
     });
     muat();
   },
@@ -607,7 +710,7 @@ const Admin = {
       box.innerHTML = rows.length ? '<div class="grid g3" style="margin-bottom:14px"><div class="card well tight center"><div class="t-xs muted">Pelatihan diikuti</div><div class="h-lg c-primary">' + rows.length + '</div></div>' +
         '<div class="card well tight center"><div class="t-xs muted">Lulus</div><div class="h-lg c-ok">' + lulus + '</div></div><div class="card well tight center"><div class="t-xs muted">Kehadiran</div><div class="h-lg">' + (hari ? Math.round(hadir / hari * 100) : 0) + '%</div></div></div>' +
         '<div class="list">' + rows.map(r => '<a class="item" href="#/pelatihan/' + esc(r.id_pelatihan) + '" data-tutup style="color:inherit;align-items:flex-start;flex-wrap:wrap"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow" style="min-width:200px"><div class="row g8 wrap"><span class="semi">' + esc(r.judul) + '</span>' + UI.chipStatus(r.status) + '</div>' +
-          '<div class="meta"><span>' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</span><span>' + esc(r.instruktur) + '</span></div>' +
+          '<div class="meta"><span>' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</span><span>' + esc(r.instruktur) + '</span>' + (r.nama_peserta ? '<span>Peserta: ' + esc(r.nama_peserta) + ' (perwakilan)</span>' : '') + '</div>' +
           '<div class="meta mt8"><span>Hadir ' + r.hadir + '/' + r.jumlah_hari + '</span><span>Pre ' + UI.angka(r.pre) + ' → Post ' + UI.angka(r.post) + (r.kenaikan !== null ? ' (' + (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan) + ')' : '') + '</span><span>Tugas ' + r.tugas_kumpul + '/' + r.tugas_total + '</span>' + (r.no_sertifikat ? '<span>No. ' + esc(r.no_sertifikat) + '</span>' : '') + '</div></div>' +
           '<div class="col g4" style="align-items:flex-end">' + UI.chipLulus(r.lulus) + (r.sertifikat ? '<span class="chip info sm">' + UI.ic('award', 'sm') + 'Sertifikat</span>' : '') + '</div></a>').join('') + '</div>'
         : UI.kosong('Belum pernah mengikuti pelatihan. Daftarkan dari halaman detail pelatihan.', 'cap');

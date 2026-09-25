@@ -37,6 +37,9 @@ const TULIS = {
   p_absen: 'absen', qr_absen: 'absen', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'
 };
 
+// Aksi yang memang bisa lama di server (PDF, unggah, sertifikat) → batas waktu lebih longgar
+const LAMA = { sert_terbitkan: 1, sert_template: 1, sert_preview: 1, laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1 };
+
 /** Penyimpanan cache: memori (instan) + localStorage (bertahan saat aplikasi dibuka ulang). */
 const Simpan = {
   mem: {}, VER: 'rl_c2_',
@@ -98,19 +101,33 @@ const API = {
     return p;
   },
 
+  /**
+   * Kirim ke Apps Script dengan:
+   * - batas waktu (koneksi menggantung dianggap putus, lalu dicoba ulang),
+   * - tunggu sinyal kembali bila HP sedang offline,
+   * - ID permintaan (rid) untuk aksi tulis → server tidak menyimpan dua kali saat dikirim ulang.
+   */
   async _kirim(action, data, opt) {
     const maks = opt.retry === undefined ? 4 : opt.retry;
-    const body = JSON.stringify({ action, token: Sesi.token(), data });
+    const tulis = !!TULIS[action] || opt.tulis;
+    const rid = tulis ? (opt.rid || (Date.now().toString(36) + Math.random().toString(36).slice(2, 10))) : '';
+    const body = JSON.stringify({ action, token: Sesi.token(), data, rid: rid || undefined });
+    const batas = LAMA[action] ? 330000 : (tulis ? 45000 : 30000);
     for (let n = 0; ; n++) {
       let j;
       try {
-        const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' });
-        j = await res.json();
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) await this.tungguOnline(20000);
+        const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const t = ctl ? setTimeout(() => ctl.abort(), batas) : null;
+        try {
+          const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow', signal: ctl ? ctl.signal : undefined });
+          j = await res.json();
+        } finally { if (t) clearTimeout(t); }
       } catch (e) {
-        if (n < maks) { opt.onRetry && opt.onRetry(n + 1); await this.tidur(900 + Math.random() * 2200 * (n + 1)); continue; }
-        throw new Error('Koneksi terputus. Periksa sinyal internet lalu coba lagi.');
+        if (n < maks) { opt.onRetry && opt.onRetry(n + 1); await this.tidur(600 + Math.random() * 1200 * (n + 1)); continue; }
+        throw new Error(navigator.onLine === false ? 'Tidak ada koneksi internet. Data belum terkirim — coba lagi saat sinyal kembali.' : 'Koneksi ke server terputus. Coba lagi sebentar lagi.');
       }
-      if (j.busy && n < maks) { opt.onRetry && opt.onRetry(n + 1); await this.tidur(700 + Math.random() * 2500 * (n + 1)); continue; }
+      if (j.busy && n < maks) { opt.onRetry && opt.onRetry(n + 1); await this.tidur(500 + Math.random() * 1500 * (n + 1)); continue; }
       if (!j.success) {
         if (j.code === 'SESI') { Sesi.clear(); if (window.App) App.keMasuk('Sesi berakhir, silakan masuk kembali.'); }
         if (j.code === 'GANTI_PIN' && window.App) App.render();
@@ -121,6 +138,10 @@ const API = {
       return j.data;
     }
   },
+  tungguOnline(ms) {
+    return new Promise(res => { const t = setTimeout(res, ms); window.addEventListener('online', () => { clearTimeout(t); setTimeout(res, 500); }, { once: true }); });
+  },
+
 
   /**
    * ⚡ Tampil instan: bila ada data tersimpan, render() langsung dipanggil
@@ -162,7 +183,7 @@ const API = {
   },
 
   /** Panaskan data semua menu peran ini di latar belakang → perpindahan menu instan. */
-  async panaskan() {
+  async panaskan(ringan) {
     const u = Sesi.user();
     if (!u || (u.peran === 'peserta' && u.wajib_ganti_pin) || this._panas) return;
     this._panas = true;
@@ -181,7 +202,7 @@ const API = {
       } else {
         await this.multi([{ action: 'dasbor_admin' }, { action: 'pelatihan_list' }, { action: 'draft_list' }, { action: 'instruktur_list' }, { action: 'umkm_list' }, { action: 'materi_list' }, { action: 'tugas_list' }]);
         const id = this.pelUtama();
-        const l = [{ action: 'log_list', data: { limit: 1000 } }, { action: 'admin_list' }, { action: 'pengaturan_get' }, { action: 'laporan_data' }];
+        const l = ringan ? [] : [{ action: 'log_list', data: { limit: 1000 } }, { action: 'admin_list' }, { action: 'pengaturan_get' }, { action: 'laporan_data' }];
         if (id) l.unshift({ action: 'pelatihan_detail', data: { id_pelatihan: id } }, { action: 'soal_list', data: { id_pelatihan: id } }, { action: 'eval_hasil', data: { id_pelatihan: id } }, { action: 'sert_status', data: { id_pelatihan: id } });
         await this.multi(l);
       }
@@ -196,7 +217,8 @@ const API = {
     const b = c.d.find(p => p.status === 'berlangsung') || c.d.find(p => p.status === 'akan datang') || c.d[0];
     return b.id_pelatihan;
   },
-  panaskanNanti() { clearTimeout(this._tp); this._tp = setTimeout(() => this.panaskan(), 1500); },
+  /** Setelah menyimpan: panaskan ulang secukupnya, ditunda 4 detik agar tidak berebut dengan penyimpanan berikutnya. */
+  panaskanNanti() { clearTimeout(this._tp); this._tp = setTimeout(() => this.panaskan(true), 4000); },
 
   /** Unggah PDF besar (maks 50 MB) bertahap per potongan ±4 MB, lengkap dengan persentase. */
   async unggahBesar(file, meta, onProgress) {

@@ -249,10 +249,28 @@ const UI = {
     const kirim = async e => {
       e && e.preventDefault();
       err.hidden = true;
+      if (o.latar) {
+        // ⚡ Simpan di latar: cek lokal → form langsung tertutup → server menyusul.
+        // Bila server menolak, perubahan dibatalkan dan form dibuka lagi lengkap dengan isian & pesannya.
+        const v = nilai();
+        try { if (o.cek) o.cek(v); } catch (ex) { err.textContent = ex.message; err.hidden = false; return; }
+        m.close();
+        let batal = null;
+        try { batal = o.segera ? o.segera(v) : null; } catch (ex) { batal = null; }
+        UI.toast(o.pesanSimpan || 'Menyimpan…', 'info');
+        try { await o.onSubmit(v); }
+        catch (ex) {
+          try { batal && batal(); } catch (e2) { }
+          UI.toast('Belum tersimpan: ' + ex.message, 'bad');
+          UI.form(Object.assign({}, o, { fields: o.fields.map(f => Object.assign({}, f, { value: f.type === 'checkbox' ? v[f.name] : (v[f.name] !== undefined ? v[f.name] : f.value) })), errAwal: ex.message }));
+        }
+        return;
+      }
       try {
         await UI.sibuk(btn, async () => { const r = await o.onSubmit(nilai(), m); if (r !== false) m.close(); });
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     };
+    if (o.errAwal) { err.textContent = o.errAwal; err.hidden = false; }
     form.addEventListener('submit', kirim);
     btn.onclick = kirim;
     o.onOpen && o.onOpen(m, form);
