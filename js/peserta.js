@@ -193,7 +193,8 @@ const Peserta = {
       '<div class="info-tile">' + UI.ic('user', 'sm') + '<div><div class="t-xs muted">Instruktur</div><div class="semi t-sm">' + esc(p.instruktur) + '</div><div class="t-xs muted clamp1">' + esc(p.tema || 'Instruktur pelatihan') + '</div></div></div></div>' +
       '<div class="col g4 t-sm mt12"><span class="row g8">' + UI.ic(p.format === 'online' ? 'link' : 'pin', 'sm') + '<span><b>' + (p.format === 'online' ? 'Link' : 'Lokasi') + ':</b> ' +
       (p.format === 'online' && /^https?:/i.test(p.lokasi_atau_link) ? '<a href="' + esc(p.lokasi_atau_link) + '" target="_blank" rel="noopener">' + esc(p.lokasi_atau_link) + '</a>' : esc(p.lokasi_atau_link)) + '</span></span>' +
-      '<span class="row g8">' + UI.ic('layers', 'sm') + '<span><b>Sektor:</b> ' + esc(p.cakupan === 'sektor' ? p.sektor : 'Umum (semua sektor)') + '</span></span></div></div>' + slot +
+      '<span class="row g8">' + UI.ic('layers', 'sm') + '<span><b>Sektor:</b> ' + esc(p.cakupan === 'sektor' ? p.sektor : 'Umum (semua sektor)') + '</span></span></div>' +
+      (p.link_dokumentasi ? '<a class="btn secondary block mt12" href="' + esc(p.link_dokumentasi) + '" target="_blank" rel="noopener">' + UI.ic('image', 'sm') + 'Lihat Dokumentasi Pelatihan</a>' : '') + '</div>' + slot +
       '<div class="card well"><div class="row between"><span class="semi t-sm">Status kelulusan</span>' + UI.chipLulus(st.lulus) + '</div>' +
       (st.kurang.length ? '<div class="t-sm muted mt8">Yang masih kurang: ' + st.kurang.map(esc).join(' · ') + '</div>' : '<div class="t-sm muted mt8">Semua syarat terpenuhi. Sertifikat diterbitkan admin setelah pelatihan selesai.</div>') + '</div>';
   },
@@ -213,9 +214,12 @@ const Peserta = {
       '<div class="semi t-sm clamp2" style="min-height:36px">' + esc(m.judul) + '</div><div class="t-xs muted row g4">' + UI.ic('file', 'sm') + UI.ukuran(m.ukuran) + '</div>' +
       '<div class="acts"><a class="btn xs secondary" href="' + esc(m.url_lihat) + '" target="_blank" rel="noopener">' + UI.ic('eye', 'sm') + 'Lihat</a><a class="btn xs primary" href="' + esc(m.url_unduh) + '" target="_blank" rel="noopener">' + UI.ic('download', 'sm') + 'Unduh</a></div></div>';
   },
+  kartuDokumentasi(p) {
+    return p.link_dokumentasi ? '<a class="card row" href="' + esc(p.link_dokumentasi) + '" target="_blank" rel="noopener" style="color:inherit"><div class="ic-tile">' + UI.ic('image') + '</div><div class="grow"><div class="semi">Dokumentasi Pelatihan</div><div class="t-xs muted">Foto & video kegiatan (OneDrive)</div></div>' + UI.ic('chevR', 'sm') + '</a>' : '';
+  },
   tab_materi(d) {
-    return d.materi.length ? '<div class="mat-grid">' + d.materi.map((m, i) => this.kartuMateri(m, i)).join('') + '</div>'
-      : '<div class="card">' + UI.kosong('Materi belum diunggah instruktur.', 'book') + '</div>';
+    return this.kartuDokumentasi(d.pelatihan) + (d.materi.length ? '<div class="mat-grid">' + d.materi.map((m, i) => this.kartuMateri(m, i)).join('') + '</div>'
+      : '<div class="card">' + UI.kosong('Materi belum diunggah instruktur.', 'book') + '</div>');
   },
 
   tab_tugas(d) {

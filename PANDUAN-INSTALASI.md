@@ -4,7 +4,7 @@ RuangLatih terdiri dari dua bagian yang dipasang terpisah:
 
 | Bagian | Isi | Dipasang di |
 |---|---|---|
-| **Backend** | 5 file `.gs` (Kode, Pelatihan, Admin, Peserta, Laporan) | Google Apps Script (akun Google PPU) |
+| **Backend** | 5 file `.gs` utama (Kode, Pelatihan, Admin, Peserta, Laporan) + 1 file alat (Bersihkan) | Google Apps Script (akun Google PPU) |
 | **Frontend** | Folder `ruanglatih/` hasil ekstrak ZIP: `index.html`, `css/`, `js/` | GitHub Pages (gratis) |
 
 Urutan wajib: **Backend dulu → salin URL `/exec` → isi `js/config.js` → baru Frontend.**
@@ -25,7 +25,8 @@ Urutan wajib: **Backend dulu → salin URL `/exec` → isi `js/config.js` → ba
 2. File `Code.gs` yang sudah ada → klik ⋮ → **Ganti nama** → `Kode` → hapus isinya → tempel seluruh isi **Kode.gs**.
 3. Klik **+** (Tambahkan file) → **Skrip** → beri nama `Pelatihan` → tempel isi **Pelatihan.gs**.
 4. Ulangi untuk `Admin`, `Peserta`, dan `Laporan`.
-5. Tekan **Ctrl+S** (Simpan). Pastikan ada 5 file di panel kiri.
+5. *(Opsional)* Tambahkan juga `Bersihkan` bila nanti perlu membersihkan data uji (lihat Bagian G).
+6. Tekan **Ctrl+S** (Simpan). Pastikan ada 5 file utama di panel kiri.
 
 ### A3. Jalankan setup — HANYA SEKALI
 1. Buka file **Kode**, di bilah atas pilih fungsi **setupAppEnvironment** → klik **▶ Jalankan**.
@@ -33,9 +34,11 @@ Urutan wajib: **Backend dulu → salin URL `/exec` → isi `js/config.js` → ba
    *(Peringatan "tidak aman" muncul karena skrip buatan sendiri belum diverifikasi Google — ini normal.)*
 3. Lihat **Log eksekusi** di bawah. Harus muncul:
    - `✅ Folder root: …`
-   - `✅ 15 sheet dibuat.`
+   - `✅ 16 sheet dibuat.`
    - `✅ Setup selesai!`
 4. Cek Google Drive: ada folder **📁 RuangLatih** berisi `Materi`, `Flyer`, `Tugas`, `Sertifikat`, `Template`, `Exports`, dan spreadsheet **Database — RuangLatih**.
+
+5. **Pembersihan log otomatis:** pilih fungsi **`pasangJadwalLog`** → ▶ Jalankan (sekali saja). Log aktivitas akan dihapus otomatis setiap **hari terakhir bulan** (±23.00 WIB) agar penyimpanan hemat. Statusnya terlihat di menu **Pengaturan**. Untuk menghentikan: jalankan `hentikanJadwalLog`.
 
 > ⚠️ Jangan jalankan `setupAppEnvironment` dua kali. Kalau terlanjur, skrip akan menolak dan menampilkan alamat spreadsheet yang sudah ada.
 
@@ -44,7 +47,7 @@ Urutan wajib: **Backend dulu → salin URL `/exec` → isi `js/config.js` → ba
 - 4 peserta, mis. Nama UMKM **Dapur Berkah Bu Ani**, PIN **1234** (wajib ganti saat masuk)
 - 1 pelatihan 2 hari dengan 5 soal dan 1 tugas
 
-Hapus baris data contoh di spreadsheet sebelum dipakai sungguhan.
+Sebelum dipakai sungguhan, bersihkan data contoh dengan file `Bersihkan` (Bagian G) — jangan hapus manual di spreadsheet.
 
 ### A4. Deploy sebagai Web App
 1. Kanan atas: **Terapkan** → **Deployment baru**.
@@ -174,12 +177,13 @@ Bila masih tampil versi lama: **Ctrl+Shift+R** atau buka mode Incognito.
 
 1. **Pengaturan** → cek nama lembaga dan format nomor sertifikat.
 2. **Instruktur** → Tambah Instruktur → bagikan **nama + kode akses** kepada instruktur.
-3. **Peserta** → Tambah UMKM satu per satu, atau **Impor** (salin kolom dari Excel/Google Form: nama_umkm, nama_pemilik, sektor, spesialisasi, no_hp, alamat, pin). PIN awal bisa dikirim langsung lewat tombol WhatsApp.
-4. **Pelatihan** → Buat Pelatihan (pilih **1 Hari** atau **2 Hari**) → buka detailnya → **Daftarkan UMKM**.
-5. Instruktur mengunggah **materi PDF**, menyusun **soal pre/post-test**, dan membuat **tugas**.
-6. Hari-H: di **Dashboard** atau detail pelatihan, nyalakan sakelar **Absensi Hari 1** dan **Pre-test**. Setelah materi: **Post-test**, **Tugas**, lalu **Evaluasi**.
-7. **Sertifikat** → unggah template (lihat bagian E) → **Pratinjau** → **Terbitkan**.
-8. **Laporan Rekap** → saring pelatihan/sektor/bulan → unduh **Excel** atau **PDF**.
+3. **Peserta** → Tambah UMKM satu per satu, atau **Impor** (salin kolom dari Excel/Google Form: nama_umkm, nama_pemilik, sektor, spesialisasi, no_hp, alamat, pin, gender). **Nama UMKM harus unik** karena dipakai peserta untuk masuk (Nama UMKM + PIN 4 angka).
+4. **Manajemen Akses** → kirim info akses (Nama UMKM + PIN) ke peserta lewat tombol WhatsApp; kirim kode akses ke instruktur.
+5. **Pelatihan** → Buat Pelatihan (pilih **1 Hari** atau **2 Hari**; bisa **Simpan Draft** dulu) → form **Daftarkan UMKM** terbuka otomatis (bisa langsung **Tambah UMKM Baru**).
+6. Instruktur mengunggah **materi PDF**, menyusun **soal pre/post-test**, dan membuat **tugas**.
+7. Hari-H: tab **Absensi** → **QR Absensi** → tampilkan layar penuh / cetak. Peserta scan QR, pilih hari, isi Nama UMKM & Nama Peserta — tercatat otomatis. Nyalakan **Pre-test**, lalu setelah materi **Post-test**, **Tugas**, dan **Evaluasi**. Pantau di **Pre-Pos Test → Rekap Nilai Peserta**.
+8. **Sertifikat** → unggah template (lihat bagian E) → **Pratinjau** → **Terbitkan**.
+9. **Laporan Rekap** → saring pelatihan/sektor/bulan → unduh **Excel** atau **PDF**. **Absensi** → **Ekspor PDF** untuk daftar hadir per pelatihan.
 
 ---
 
@@ -209,6 +213,19 @@ Unggah sebagai **template bawaan** (berlaku untuk semua pelatihan) atau **khusus
 - Kuota Apps Script akun Gmail gratis: ±20.000 panggilan URL per hari dan waktu eksekusi 6 menit per panggilan — cukup untuk 50 peserta serentak. Penerbitan sertifikat otomatis dipecah per ±4 menit.
 - Batas ukuran: materi PDF 50 MB (diunggah bertahap), tugas 10 MB (foto diperkecil otomatis), flyer 5 MB, template PPTX 20 MB.
 
+## BAGIAN G — Membersihkan data uji (sebelum dipakai riil)
+
+1. Tambahkan file `Bersihkan` (isi **Bersihkan.gs**) di proyek Apps Script → Ctrl+S.
+2. Jalankan **`lihatIsiData`** → cek jumlah data (tidak menghapus apa pun).
+3. Pilih salah satu dan jalankan **dua kali dalam 5 menit** (jalankan pertama = pratinjau, kedua = menghapus):
+   - **`kosongkanSemuaData`** → semua data uji dihapus (ubah `PERTAHANKAN.UMKM`/`INSTRUKTUR` ke `true` bila datanya sudah riil).
+   - **`hapusDataContoh`** → hanya data contoh bawaan (Bagas, 4 UMKM contoh, pelatihan PL-001).
+4. Selalu dipertahankan: Admin, Pengaturan, form evaluasi bawaan, folder Template. Cadangan spreadsheet dibuat otomatis; file Drive masuk Sampah (30 hari).
+5. Semua pengguna otomatis keluar → masuk lagi. QR absensi yang pernah dicetak perlu dicetak ulang.
+6. Setelah selesai, file `Bersihkan` boleh dihapus dari proyek. Jangan jalankan `isiDataContoh` lagi.
+
+Bila mengedit isi spreadsheet secara langsung, jalankan **`bersihkanCache`** agar perubahan langsung terbaca aplikasi (tanpa itu, paling lambat 10 menit).
+
 ## Troubleshooting
 
 | Gejala | Penyebab | Solusi |
@@ -220,4 +237,7 @@ Unggah sebagai **template bawaan** (berlaku untuk semua pelatihan) atau **khusus
 | Tampilan tanpa warna (CSS 404) | Diunggah lewat web GitHub | Push ulang lewat terminal (C5) |
 | Perubahan backend tidak berlaku | Deployment belum diperbarui | Lakukan A5 (Versi baru) |
 | Materi/flyer tidak tampil untuk peserta | Kebijakan berbagi Workspace | Lihat catatan berbagi di Bagian F |
-| Peserta "Akun dikunci 15 menit" | 5 kali salah PIN | Tunggu 15 menit, atau Admin → Peserta → Reset PIN |
+| Peserta "Akun dikunci 15 menit" | 5 kali salah PIN | Tunggu 15 menit, atau Admin → Manajemen Akses → Akun Peserta → Reset PIN |
+| Peserta tidak bisa masuk padahal PIN benar | Nama UMKM ganda / salah ketik | Cek tanda "nama ganda" di Manajemen Akses, ubah nama di menu Peserta |
+| Menu Pengaturan: "Pembersihan log belum aktif" | Jadwal belum dipasang | Jalankan `pasangJadwalLog` sekali di editor Apps Script |
+| Scan QR "tidak terdaftar" | UMKM belum didaftarkan ke pelatihan itu | Detail pelatihan → Daftarkan UMKM |

@@ -240,7 +240,8 @@ const Admin = {
         { name: 'jam', label: 'Jam', value: p.jam || '09.00–15.00 WIB' },
         { name: 'kuota', label: 'Kuota peserta', type: 'number', value: p.kuota || 40, attrs: 'min="1"' },
         { name: 'format', label: 'Format', type: 'seg', value: p.format, options: [['tatap muka', 'Tatap muka'], ['online', 'Online']] },
-        { name: 'lokasi_atau_link', label: p.format === 'online' ? 'Link meeting' : 'Lokasi', value: p.lokasi_atau_link, full: true, placeholder: 'mis. Aula Sentra Cakung Lt. 2 atau https://meet.google.com/…' }
+        { name: 'lokasi_atau_link', label: p.format === 'online' ? 'Link meeting' : 'Lokasi', value: p.lokasi_atau_link, full: true, placeholder: 'mis. Aula Sentra Cakung Lt. 2 atau https://meet.google.com/…' },
+        { name: 'link_dokumentasi', label: 'Link dokumentasi pelatihan (opsional)', type: 'url', value: p.link_dokumentasi, full: true, placeholder: 'Tempel link folder OneDrive, mis. https://…sharepoint.com/…', hint: 'Bisa dibuka peserta & instruktur. Pastikan pengaturan berbagi OneDrive mengizinkan orang yang punya link untuk melihat.' }
       ],
       onOpen: (m, form) => {
         const atur = () => {
@@ -251,7 +252,11 @@ const Admin = {
         form.addEventListener('change', atur);
       },
       latar: !baru, pesanSimpan: 'Menyimpan perubahan pelatihan…',
-      cek: v => { if (!v.jumlah_hari) throw new Error('Pilih jumlah hari: 1 hari atau 2 hari.'); if (!v.judul) throw new Error('Judul pelatihan wajib diisi.'); },
+      cek: v => {
+        if (!v.jumlah_hari) throw new Error('Pilih jumlah hari: 1 hari atau 2 hari.');
+        if (!v.judul) throw new Error('Judul pelatihan wajib diisi.');
+        if (v.link_dokumentasi && !/^https?:\/\/\S+$/i.test(v.link_dokumentasi)) throw new Error('Link dokumentasi harus diawali https:// (salin dari OneDrive).');
+      },
       onSubmit: async v => {
         if (!v.jumlah_hari) throw new Error('Pilih jumlah hari: 1 hari atau 2 hari.');
         const r = await API.call('pelatihan_simpan', Object.assign({ id_pelatihan: p.id_pelatihan, id_draft: draft ? draft.id_draft : '' }, v));
@@ -363,8 +368,9 @@ const Admin = {
     const p = d.pelatihan;
     return '<div class="grid g2" style="align-items:start"><div class="card"><dl class="kv">' +
       [['ID', p.id_pelatihan], ['Tema', p.tema || '-'], ['Cakupan', p.cakupan === 'sektor' ? 'Sektor ' + p.sektor : 'Umum'], ['Instruktur', p.instruktur], ['Jumlah hari', p.jumlah_hari + ' hari'],
-        ['Tanggal', p.tanggal_hari.map((t, i) => 'Hari ' + (i + 1) + ': ' + UI.tglHari(t)).join('<br>')], ['Jam', p.jam], ['Format', p.format], ['Lokasi/Link', p.lokasi_atau_link], ['Kuota', p.kuota], ['Jumlah tugas', d.jumlah_tugas]]
-        .map(x => '<dt>' + x[0] + '</dt><dd>' + (x[0] === 'Tanggal' ? x[1] : esc(x[1])) + '</dd>').join('') + '</dl></div>' +
+        ['Tanggal', p.tanggal_hari.map((t, i) => 'Hari ' + (i + 1) + ': ' + UI.tglHari(t)).join('<br>')], ['Jam', p.jam], ['Format', p.format], ['Lokasi/Link', p.lokasi_atau_link], ['Kuota', p.kuota], ['Jumlah tugas', d.jumlah_tugas],
+        ['Dokumentasi', p.link_dokumentasi ? '<a href="' + esc(p.link_dokumentasi) + '" target="_blank" rel="noopener">' + UI.ic('link', 'sm') + ' Buka dokumentasi</a>' : '<span class="faint">Belum ada — isi lewat tombol Ubah</span>']]
+        .map(x => '<dt>' + x[0] + '</dt><dd>' + (x[0] === 'Tanggal' || x[0] === 'Dokumentasi' ? x[1] : esc(x[1])) + '</dd>').join('') + '</dl></div>' +
       '<div class="card"><div class="card-h"><div class="h-sm">Flyer Pelatihan</div><button class="btn secondary sm" data-aksi="flyer">' + UI.ic('upload', 'sm') + (p.flyer ? 'Ganti' : 'Unggah') + '</button></div>' +
       (p.flyer ? '<img src="' + esc(p.flyer) + '" alt="Flyer" referrerpolicy="no-referrer" style="width:100%;border-radius:12px;background:var(--blush-2)">' : UI.kosong('Belum ada flyer. Flyer tampil di beranda peserta selama pelatihan belum selesai.', 'image')) + '</div></div>';
   },
@@ -1067,7 +1073,8 @@ const Admin = {
   // LOG AKTIVITAS
   // ===========================================================
   async log(el) {
-    el.innerHTML = Kelola.kepala('Log Aktivitas', 'Jejak perubahan data & aktivitas penting', '<button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button>') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Log Aktivitas', 'Jejak aktivitas bulan berjalan · dihapus otomatis setiap akhir bulan', '<button class="btn outline sm" data-aksi="csv">' + UI.ic('download', 'sm') + 'Unduh CSV</button><button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button>') +
+      '<div class="card well tight row" style="margin-bottom:20px">' + UI.ic('info', 'sm') + '<span class="t-sm">Untuk menghemat penyimpanan, log dihapus otomatis pada <b>hari terakhir setiap bulan</b>. Unduh CSV sebelum akhir bulan bila perlu arsip.</span></div><div data-isi></div>';
     const isi = $('[data-isi]', el);
     let rows = [], q = '', peran = '', hal = 1;
     const per = 30;
@@ -1090,7 +1097,18 @@ const Admin = {
         }, { el: isi });
       } catch (e) { UI.galat(isi, e, muat); }
     };
-    UI.klik(el, { segar: b => UI.sibuk(b, async () => { rows = await API.call('log_list', { limit: 1000 }); gambar(); }).catch(UI.gagal), hal: b => { hal = +b.dataset.h; gambar(); } });
+    UI.klik(el, {
+      segar: b => UI.sibuk(b, async () => { rows = await API.call('log_list', { limit: 1000 }); gambar(); }).catch(UI.gagal),
+      hal: b => { hal = +b.dataset.h; gambar(); },
+      csv: () => {
+        if (!rows.length) return UI.toast('Belum ada log.', 'info');
+        const qq = v => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
+        const csv = [['Waktu', 'Peran', 'Nama Pengguna', 'ID', 'Aktivitas']].concat(rows.map(r => [r.waktu, r.peran, r.nama || '', r.id_pengguna, r.aksi])).map(r => r.map(qq).join(';')).join('\r\n');
+        const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+        const a = document.createElement('a'); a.href = url; a.download = 'Log Aktivitas RuangLatih ' + UI.hariIni().slice(0, 7) + '.csv'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }
+    });
     muat();
   },
 
@@ -1254,6 +1272,7 @@ const Admin = {
       '<div><button class="btn primary" data-aksi="simpan">Simpan Pengaturan</button></div></div>' +
       '<div class="col g20"><div class="card"><div class="h-sm">Penyimpanan Google</div><div class="list mt12">' +
       [['Folder utama Drive', s.folder, 'layers'], ['Folder template sertifikat', s.folder_template, 'award'], ['Spreadsheet database', s.spreadsheet, 'chart']].map(x => '<a class="item" href="' + esc(x[1]) + '" target="_blank" rel="noopener"><div class="ic-tile sm">' + UI.ic(x[2], 'sm') + '</div><div class="grow semi">' + x[0] + '</div>' + UI.ic('chevR', 'sm') + '</a>').join('') + '</div></div>' +
+      '<div class="card"><div class="h-sm">Pembersihan Log Otomatis</div><div class="mt8">' + (s.log_otomatis ? '<span class="chip ok dot sm">Aktif — setiap akhir bulan</span>' : '<span class="chip warn sm">Belum aktif</span><div class="t-sm muted mt8">Jalankan fungsi <b>pasangJadwalLog</b> sekali dari editor Apps Script.</div>') + '</div></div>' +
       '<div class="card"><div class="h-sm">Koneksi API</div><div class="t-sm muted mt8" style="word-break:break-all">' + esc(GAS_URL) + '</div><div class="mt12" data-sehat><span class="chip line sm">Memeriksa…</span></div></div></div></div>';
     App.cekServer().then(h => { const x = $('[data-sehat]', isi); if (x) x.innerHTML = h && h.siap ? '<span class="chip ok dot sm">Terhubung · versi ' + esc(h.versi) + '</span>' : '<span class="chip bad sm">Tidak terhubung / belum setup</span>'; });
     UI.klik(isi, {

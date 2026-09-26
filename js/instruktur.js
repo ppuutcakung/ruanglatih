@@ -36,7 +36,8 @@ const Instruktur = {
       hero = '<div class="card" style="padding:24px"><div class="row wrap g8">' +
         (p.status === 'berlangsung' ? '<span class="live-dot">LIVE Hari ' + L.hari_ke + ' dari ' + p.jumlah_hari + '</span>' : UI.chipStatus(p.status)) +
         '<span class="chip line">' + UI.ic('pin', 'sm') + '<span class="clamp1" style="max-width:260px">' + esc(p.format === 'online' ? 'Online' : p.lokasi_atau_link) + '</span></span>' +
-        '<span class="chip line">' + UI.ic('users', 'sm') + L.jumlah_peserta + ' Peserta Terdaftar</span></div>' +
+        '<span class="chip line">' + UI.ic('users', 'sm') + L.jumlah_peserta + ' Peserta Terdaftar</span>' +
+        (p.link_dokumentasi ? '<a class="chip info" href="' + esc(p.link_dokumentasi) + '" target="_blank" rel="noopener">' + UI.ic('image', 'sm') + 'Dokumentasi</a>' : '') + '</div>' +
         '<div class="h-xl mt12">' + esc(p.judul) + '</div><div class="t-sm muted">' + esc(UI.rentang(p)) + ' · ' + esc(p.jam) + '</div>' +
         '<div class="row between mt20" style="max-width:560px"><span class="row g8 t-sm">' + UI.ic('checkCircle', 'sm') + 'Kehadiran Hari ' + L.hari_ke + '</span><span class="chip sm">' + L.hadir_hari_ini + ' / ' + L.jumlah_peserta + ' Hadir (' + pct + '%)</span></div>' +
         '<div class="bar ok mt8" style="max-width:560px"><i style="width:' + pct + '%"></i></div></div>';
@@ -98,6 +99,7 @@ const Instruktur = {
       await API.ambil('pelatihan_detail', { id_pelatihan: id }, d => {
       const p = d.pelatihan;
       box.innerHTML = '<div class="h-md">' + esc(p.judul) + '</div><div class="t-sm muted">' + esc(UI.rentang(p)) + ' · ' + esc(p.jam) + ' · ' + esc(p.lokasi_atau_link) + '</div>' +
+        (p.link_dokumentasi ? '<a class="btn secondary sm mt12" href="' + esc(p.link_dokumentasi) + '" target="_blank" rel="noopener">' + UI.ic('image', 'sm') + 'Buka Dokumentasi Pelatihan</a>' : '') +
         '<div class="tbl-wrap mt20"><table class="tbl"><thead><tr><th>UMKM</th><th class="num">Hadir</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Tugas</th><th>Status</th></tr></thead><tbody>' +
         (d.peserta.length ? d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + ' · ' + esc(x.sektor) + '</div></td><td class="num">' + x.hadir + '/' + x.jumlah_hari + '</td><td class="num">' + UI.angka(x.pre) + '</td><td class="num">' + UI.angka(x.post) + '</td><td class="num">' + x.tugas_kumpul + '/' + x.tugas_total + '</td><td>' + UI.chipLulus(x.lulus) + '</td></tr>').join('')
           : '<tr><td colspan="6">' + UI.kosong('Belum ada peserta.', 'users') + '</td></tr>') + '</tbody></table></div>';

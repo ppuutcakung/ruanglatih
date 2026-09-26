@@ -234,7 +234,14 @@ const Kelola = {
       });
     };
     UI.klik(el, {
-      tambah: () => idPel ? editor() : UI.toast('Pilih pelatihan terlebih dahulu.', 'info'),
+      tambah: () => {
+        if (!idPel) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
+        const idA = idPel;
+        this.modalSoalBanyak(idA, {
+          segera: baru => { const lama = data.soal.slice(); data.soal = data.soal.concat(baru); gambar(); return () => { data.soal = lama; gambar(); }; },
+          selesai: () => API.call('soal_list', { id_pelatihan: idA }).then(d2 => { if (idA === idPel && isi.isConnected) { data = d2; gambar(); } }).catch(() => { })
+        });
+      },
       ubah: b => editor(data.soal.find(x => x.id_soal === b.dataset.id)),
       hapus: async b => {
         if (!await UI.konfirmasi('Hapus soal ini dari bank soal?', { ok: 'Hapus', bahaya: true })) return;
@@ -300,6 +307,91 @@ const Kelola = {
     };
     UI.loading(host, 2);
     API.ambil('nilai_rekap', { id_pelatihan: idPel }, x => { if (host._id === idPel) { d = x; gambar(); } }, { el: host }).catch(e => UI.galat(host, e, () => this.rekapTes(host, idPel)));
+  },
+
+  /**
+   * Tambah BANYAK soal sekaligus: isi semua soal & kunci jawaban dalam satu layar,
+   * lalu simpan sekali. Isian tersimpan otomatis di perangkat (draf) sampai berhasil disimpan.
+   */
+  modalSoalBanyak(idPel, aksi) {
+    const KD = 'rl_soal_draf_' + idPel;
+    const kosong = () => ({ pertanyaan: '', opsi_a: '', opsi_b: '', opsi_c: '', opsi_d: '', opsi_e: '', kunci: '' });
+    let draf = null;
+    try { draf = JSON.parse(localStorage.getItem(KD) || 'null'); } catch (e) { }
+    let jenis = (draf && draf.jenis) || 'pre+post';
+    let soal = draf && draf.soal && draf.soal.length ? draf.soal : [kosong(), kosong(), kosong()];
+    const isiSoal = x => x.pertanyaan.trim() || ['a', 'b', 'c', 'd', 'e'].some(k => x['opsi_' + k].trim());
+    const simpanDraf = () => { try { if (soal.some(isiSoal)) localStorage.setItem(KD, JSON.stringify({ jenis: jenis, soal: soal })); else localStorage.removeItem(KD); } catch (e) { } };
+    const m = UI.modal({
+      title: 'Tambah Soal Pre/Post-Test', wide: true,
+      body: (draf ? '<div class="card well tight row between wrap" style="margin-bottom:14px"><span class="t-sm">' + UI.ic('info', 'sm') + ' Melanjutkan draf soal yang belum disimpan.</span><button class="btn xs outline" data-reset>Mulai dari kosong</button></div>' : '') +
+        '<div class="row wrap between" style="margin-bottom:14px"><div class="field" style="gap:6px"><span class="lbl">Dipakai untuk (semua soal)</span><div class="seg" data-jenis style="width:auto">' +
+        [['pre', 'Pre-test'], ['post', 'Post-test'], ['pre+post', 'Pre + Post']].map(x => '<button type="button" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div></div>' +
+        '<div class="hint" style="max-width:340px">Isi pertanyaan & opsi, lalu klik <b>bulatan Kunci</b> di samping jawaban yang benar. Kartu kosong dilewati.</div></div>' +
+        '<div class="col g8" data-kartu></div>' +
+        '<div class="row g8 mt12"><button class="btn secondary sm" data-tambah>' + UI.ic('plus', 'sm') + 'Tambah Soal Lagi</button><button class="btn outline sm" data-tambah5>+5 soal</button></div>' +
+        '<div class="err mt12" hidden data-err></div>',
+      foot: '<span class="t-sm muted grow" data-hitung></span><button class="btn outline" data-tutup>Tutup</button><button class="btn primary" data-simpan>' + UI.ic('check', 'sm') + 'Simpan Semua</button>',
+      onClose: () => { simpanDraf(); if (soal.some(isiSoal) && !m._tersimpan) UI.toast('Draf soal tersimpan di perangkat ini. Klik Tambah Soal untuk melanjutkan.', 'info'); }
+    });
+    const box = $('[data-kartu]', m.el), err = $('[data-err]', m.el);
+    const segJ = () => $$('[data-jenis] button', m.el).forEach(b => b.classList.toggle('on', b.dataset.v === jenis));
+    segJ();
+    const hitung = () => { const n = soal.filter(isiSoal).length; $('[data-hitung]', m.el).textContent = n + ' soal terisi'; $('[data-simpan]', m.el).innerHTML = UI.ic('check', 'sm') + 'Simpan Semua (' + n + ')'; };
+    const kartu = (x, i) => '<div class="card tight" data-i="' + i + '" style="border-width:1.5px"><div class="row between" style="margin-bottom:10px"><span class="chip solid sm">Soal ' + (i + 1) + '</span>' +
+      '<button class="btn icon sm ghost" data-hapus="' + i + '" title="Hapus kartu ini" aria-label="Hapus">' + UI.ic('trash', 'sm') + '</button></div>' +
+      '<textarea class="textarea" style="min-height:64px" data-k="pertanyaan" placeholder="Tulis pertanyaan…">' + esc(x.pertanyaan) + '</textarea>' +
+      '<div class="grid g2 mt8" style="gap:8px">' + ['a', 'b', 'c', 'd', 'e'].map(k => '<label class="row g8" style="align-items:center"><input type="radio" name="kunci_' + i + '" value="' + k + '"' + (x.kunci === k ? ' checked' : '') + ' title="Tandai sebagai kunci" style="width:18px;height:18px;accent-color:var(--ok)">' +
+        '<span class="semi t-sm" style="width:16px">' + k.toUpperCase() + '</span><input class="input grow" style="height:40px" data-k="opsi_' + k + '" value="' + esc(x['opsi_' + k]) + '" placeholder="Opsi ' + k.toUpperCase() + (k === 'e' ? ' (opsional)' : '') + '"></label>').join('') +
+      '</div><div class="t-xs muted mt8" data-ket>' + (x.kunci ? 'Kunci: <b class="c-ok">' + x.kunci.toUpperCase() + '</b>' : 'Belum ada kunci — klik bulatan di samping jawaban benar') + '</div></div>';
+    const gambar = () => { box.innerHTML = soal.map(kartu).join(''); hitung(); };
+    gambar();
+    box.addEventListener('input', e => {
+      const c = e.target.closest('[data-i]'), k = e.target.dataset.k;
+      if (!c || !k) return;
+      soal[+c.dataset.i][k] = e.target.value; c.style.borderColor = ''; hitung(); simpanDraf();
+    });
+    box.addEventListener('change', e => {
+      if (e.target.type !== 'radio') return;
+      const c = e.target.closest('[data-i]'); soal[+c.dataset.i].kunci = e.target.value;
+      $('[data-ket]', c).innerHTML = 'Kunci: <b class="c-ok">' + e.target.value.toUpperCase() + '</b>'; c.style.borderColor = ''; simpanDraf();
+    });
+    box.addEventListener('click', e => { const b = e.target.closest('[data-hapus]'); if (!b) return; soal.splice(+b.dataset.hapus, 1); if (!soal.length) soal.push(kosong()); gambar(); simpanDraf(); });
+    const tambah = n => { for (let i = 0; i < n; i++) soal.push(kosong()); gambar(); const c = box.querySelectorAll('[data-i]')[soal.length - n]; if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); $('textarea', c).focus(); } };
+    $('[data-tambah]', m.el).onclick = () => tambah(1);
+    $('[data-tambah5]', m.el).onclick = () => tambah(5);
+    $('[data-jenis]', m.el).onclick = e => { const b = e.target.closest('button'); if (b) { jenis = b.dataset.v; segJ(); simpanDraf(); } };
+    const rs = $('[data-reset]', m.el);
+    if (rs) rs.onclick = () => { soal = [kosong(), kosong(), kosong()]; localStorage.removeItem(KD); rs.closest('.card').remove(); gambar(); };
+    $('[data-simpan]', m.el).onclick = () => {
+      err.hidden = true;
+      const terisi = soal.map((x, i) => ({ x: x, i: i })).filter(o => isiSoal(o.x));
+      if (!terisi.length) { err.textContent = 'Belum ada soal yang diisi.'; err.hidden = false; return; }
+      const salah = terisi.map(o => {
+        const x = o.x;
+        const msg = !x.pertanyaan.trim() ? 'pertanyaan belum diisi' : ['a', 'b', 'c', 'd'].some(k => !x['opsi_' + k].trim()) ? 'opsi A–D wajib diisi' : !x.kunci ? 'kunci jawaban belum dipilih' : !x['opsi_' + x.kunci].trim() ? 'opsi kunci (' + x.kunci.toUpperCase() + ') kosong' : '';
+        return msg ? { i: o.i, msg: msg } : null;
+      }).filter(Boolean);
+      $$('[data-i]', box).forEach(c => c.style.borderColor = '');
+      if (salah.length) {
+        salah.forEach(s2 => { const c = $('[data-i="' + s2.i + '"]', box); if (c) c.style.borderColor = 'var(--bad)'; });
+        err.innerHTML = salah.slice(0, 6).map(s2 => 'Soal ' + (s2.i + 1) + ': ' + s2.msg).join('<br>') + (salah.length > 6 ? '<br>…dan ' + (salah.length - 6) + ' lainnya' : '');
+        err.hidden = false;
+        const c = $('[data-i="' + salah[0].i + '"]', box); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      const kirim = terisi.map(o => Object.assign({ jenis: jenis }, o.x, { pertanyaan: o.x.pertanyaan.trim() }));
+      // ⚡ Optimistis: modal tertutup, soal langsung tampil; server menyusul di latar
+      m._tersimpan = true;
+      simpanDraf();
+      m.close();
+      const t = Date.now().toString(36);
+      const batal = aksi.segera ? aksi.segera(kirim.map((x, i) => Object.assign({ id_soal: 'tmp-' + t + i }, x))) : null;
+      UI.toast('Menyimpan ' + kirim.length + ' soal…', 'info');
+      API.call('soal_simpan_banyak', { id_pelatihan: idPel, soal: kirim }, { retry: 6 })
+        .then(r => { try { localStorage.removeItem(KD); } catch (e) { } UI.toast(r.message); aksi.selesai && aksi.selesai(); })
+        .catch(e => { batal && batal(); UI.toast('Soal belum tersimpan: ' + e.message, 'bad'); this.modalSoalBanyak(idPel, aksi); });
+    };
   },
 
   // ===========================================================

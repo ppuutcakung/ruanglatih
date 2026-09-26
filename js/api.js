@@ -29,7 +29,7 @@ const BACA = {
   p_riwayat: '*', p_sertifikat: '*'
 };
 const TULIS = {
-  materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
+  materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
   umkm_simpan: 'umkm', umkm_reset_pin: 'umkm', umkm_status: 'umkm', umkm_import: 'umkm', instruktur_simpan: 'ins',
   pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
