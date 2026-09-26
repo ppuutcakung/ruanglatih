@@ -8,7 +8,7 @@ var App = {
 
   modul() { const u = Sesi.user(); return u ? { peserta: Peserta, instruktur: Instruktur, admin: Admin }[u.peran] : null; },
   awal() { const u = Sesi.user(); return u && u.peran === 'peserta' ? 'beranda' : 'dasbor'; },
-  linkWA(teks) { return 'https://wa.me/' + APP_CONFIG.waAdmin + '?text=' + encodeURIComponent(teks || 'Halo Admin PPU, saya butuh bantuan akun RuangLatih.'); },
+  linkWA(teks) { return 'https://wa.me/' + APP_CONFIG.waAdmin + '?text=' + encodeURIComponent(teks || 'Halo Admin PPU, saya butuh bantuan akun ' + APP_CONFIG.nama + '.'); },
 
   async cekServer() {
     if (this._server) return this._server;
@@ -41,7 +41,7 @@ var App = {
   },
 
   async keluar() {
-    if (!await UI.konfirmasi('Keluar dari RuangLatih di perangkat ini?', { ok: 'Keluar' })) return;
+    if (!await UI.konfirmasi('Keluar dari ' + APP_CONFIG.nama + ' di perangkat ini?', { ok: 'Keluar' })) return;
     sessionStorage.clear();
     this.keMasuk();
     UI.toast('Anda sudah keluar.', 'info');
@@ -84,9 +84,9 @@ var App = {
   },
 
   kerangkaAuth(judul, sub, isi) {
-    return '<div class="auth"><div class="auth-hero"><div class="top"><div class="logo-tile">' + UI.ic('cap', 'lg') + '</div><span class="pill-glass" data-srv>' + esc(APP_CONFIG.singkat) + '</span></div>' +
+    return '<div class="auth"><div class="auth-hero"><div class="top"><div class="logo-tile' + UI.kelasLogo() + '">' + UI.logo() + '</div><span class="pill-glass" data-srv>' + esc(APP_CONFIG.singkat) + '</span></div>' +
       '<h1>' + esc(judul) + '</h1><p>' + esc(sub) + '</p></div><div class="auth-card"><div class="card" style="padding:24px">' + isi + '</div></div>' +
-      '<div class="auth-foot"><div class="row g8">' + UI.ic('shield', 'sm') + 'Data tersimpan aman di Google Workspace</div>' + esc(APP_CONFIG.lembaga) + '</div></div>';
+      '<div class="auth-foot"><div class="row g8">' + UI.ic('shield', 'sm') + 'Data tersimpan aman di Google Workspace</div>' + esc(APP_CONFIG.footer || APP_CONFIG.lembaga) + '</div></div>';
   },
 
   // ===========================================================
@@ -96,7 +96,7 @@ var App = {
     this._shell = '';
     const app = $('#app');
     let peran = localStorage.getItem('rl_peran') || 'peserta';
-    app.innerHTML = this.kerangkaAuth(APP_CONFIG.nama, 'Pusat Pendampingan UMKM Cakung',
+    app.innerHTML = this.kerangkaAuth(APP_CONFIG.nama, APP_CONFIG.tagline || 'Pusat Pendampingan UMKM Cakung',
       '<div class="seg" data-peran>' + [['peserta', 'Peserta UMKM'], ['instruktur', 'Instruktur'], ['admin', 'Super Admin']].map(x => '<button type="button" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
       '<form class="col g20 mt20" data-form novalidate></form>');
     const form = $('[data-form]', app);
@@ -115,7 +115,7 @@ var App = {
         '<div class="field"><label for="m_pw">Kata sandi</label><div class="input-ic">' + UI.ic('lock') + '<input class="input" id="m_pw" type="password" autocomplete="current-password"></div></div>';
       form.innerHTML = f + '<div class="err" data-err' + (pesan ? '' : ' hidden') + '>' + esc(pesan || '') + '</div>' +
         '<button class="btn primary block" type="submit" data-masuk style="height:50px">Masuk' + UI.ic('chevR', 'sm') + '</button>' +
-        (peran === 'peserta' ? '<a class="btn ghost block" href="' + this.linkWA('Halo Admin PPU, saya lupa PIN / nama login RuangLatih. Nama UMKM: ') + '" target="_blank" rel="noopener">' + UI.ic('message', 'sm') + 'Lupa PIN? Hubungi Admin</a>' : '');
+        (peran === 'peserta' ? '<a class="btn ghost block" href="' + this.linkWA('Halo Admin PPU, saya lupa PIN / nama login ' + APP_CONFIG.nama + '. Nama UMKM: ') + '" target="_blank" rel="noopener">' + UI.ic('message', 'sm') + 'Lupa PIN? Hubungi Admin</a>' : '');
       pesan = '';
       if (peran === 'peserta') {
         pin = this.pasangPin($('[data-pin]', form));
@@ -226,14 +226,14 @@ var App = {
     this._shell = ''; this._qr = true;
     $$('.overlay').forEach(o => o.remove());
     const app = $('#app');
-    app.innerHTML = this.kerangkaAuth('Absensi Pelatihan', 'Pusat Pendampingan UMKM Cakung', '<div data-qr></div>');
+    app.innerHTML = this.kerangkaAuth('Absensi Pelatihan', APP_CONFIG.tagline || 'Pusat Pendampingan UMKM Cakung', '<div data-qr></div>');
     const box = $('[data-qr]', app);
     UI.loading(box, 2);
     let d;
     try { d = await API.call('qr_info', { id_pelatihan: id, kode: kode }, { retry: 5 }); }
     catch (e) {
       box.innerHTML = '<div class="empty"><div class="ic-tile" style="background:var(--bad-bg);color:var(--bad)">' + UI.ic('alert', 'lg') + '</div><div class="semi">QR tidak dapat dipakai</div><div class="t-sm">' + esc(e.message) + '</div></div>' +
-        '<a class="btn outline block mt12" href="#/">Buka RuangLatih</a>';
+        '<a class="btn outline block mt12" href="#/">Buka ' + esc(APP_CONFIG.nama) + '</a>';
       return;
     }
     const bisa = d.hari.filter(h => h.buka);
@@ -272,7 +272,7 @@ var App = {
           '<div class="h-md mt8">' + (r.sudah ? 'Sudah Tercatat Hadir' : 'Absensi Berhasil!') + '</div><div class="t-sm muted">' + esc(r.judul) + '</div>' +
           '<div class="card well tight mt12" style="text-align:left"><dl class="kv"><dt>Hari</dt><dd>Hari ' + r.hari_ke + ' · ' + esc(UI.tglHari(r.tanggal)) + '</dd><dt>UMKM</dt><dd>' + esc(r.nama_umkm) + '</dd><dt>Peserta</dt><dd>' + esc(r.nama_peserta) + '</dd><dt>Jam</dt><dd>' + esc(UI.jam(r.waktu)) + ' WIB</dd></dl></div>' +
           '<div class="t-sm muted mt8">' + (r.sudah ? 'Absensi Anda sudah tercatat sebelumnya.' : 'Terima kasih, selamat mengikuti pelatihan. Anda tidak perlu absen lagi di aplikasi.') + '</div>' +
-          '<a class="btn primary block mt12" href="#/">' + UI.ic('home', 'sm') + 'Buka Aplikasi RuangLatih</a></div>';
+          '<a class="btn primary block mt12" href="#/">' + UI.ic('home', 'sm') + 'Buka Aplikasi ' + esc(APP_CONFIG.nama) + '</a></div>';
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     };
   },
@@ -292,7 +292,7 @@ var App = {
     }
     const admin = u.peran === 'admin';
     app.innerHTML = '<div class="d-app"><div class="side-overlay" data-tutupnav></div><aside class="side">' +
-      '<div class="brand"><div class="logo">' + UI.ic('cap', 'lg') + '</div><div><b>' + esc(APP_CONFIG.nama) + '</b><small>' + esc(admin ? M.subjudul : 'Portal Instruktur') + '</small></div></div>' +
+      '<div class="brand"><div class="logo' + UI.kelasLogo() + '">' + UI.logo() + '</div><div><b>' + esc(APP_CONFIG.nama) + '</b><small>' + esc(admin ? M.subjudul : 'Portal Instruktur') + '</small></div></div>' +
       '<nav class="nav col g4">' + M.nav.map(n => '<a href="#/' + n[0] + '" data-nav="' + n[0] + '">' + UI.ic(n[1]) + '<span>' + n[2] + '</span></a>').join('') +
       '<a href="#" data-bantuan>' + UI.ic('help') + '<span>Bantuan & Dokumentasi</span></a></nav>' +
       '<div class="me"><div class="av">' + esc(UI.inisial(u.nama)) + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(u.nama) + '</div><div class="t-xs muted">' + (admin ? 'Super Admin' : 'Instruktur') + '</div></div>' +
@@ -300,7 +300,7 @@ var App = {
       '<div class="main"><header class="topbar"><button class="btn icon ghost only-m" data-bukanav aria-label="Menu">' + UI.ic('menu') + '</button>' +
       (admin ? '<form class="search input-ic" data-cari>' + UI.ic('search', 'sm') + '<input class="input" type="search" placeholder="Cari data peserta, materi, pelatihan…"></form>' : '<div class="grow"></div>') +
       '<span class="chip line hide-m" data-srv>' + UI.ic('refresh', 'sm') + 'Memeriksa server…</span>' +
-      '<span class="chip hide-m">' + UI.ic('calendar', 'sm') + esc(UI.tglPendek(UI.hariIni())) + '</span></header><main class="content" data-hal></main></div></div>';
+      '<span class="chip hide-m">' + UI.ic('calendar', 'sm') + esc(UI.tglPendek(UI.hariIni())) + '</span></header><main class="content"><div data-hal></div><footer class="app-foot" data-foot>' + esc(APP_CONFIG.footer || '') + '</footer></main></div></div>';
     const d = $('.d-app', app);
     app.onclick = e => {
       if (e.target.closest('[data-bukanav]')) d.classList.add('nav-open');
@@ -362,7 +362,44 @@ var App = {
     catch (e) { if (wadah.isConnected) UI.galat(wadah, e, () => this.tampil()); }
   },
 
+  // ===========================================================
+  // IDENTITAS APLIKASI (nama, tagline, logo, footer, warna, WA) — diatur admin di Pengaturan
+  // ===========================================================
+  _asli: null,
+  terapkanBrand(b) {
+    if (!this._asli) this._asli = Object.assign({}, APP_CONFIG);
+    const A = this._asli;
+    b = b || {};
+    APP_CONFIG.nama = b.nama || A.nama;
+    APP_CONFIG.tagline = b.tagline || A.tagline || '';
+    APP_CONFIG.footer = b.footer || A.footer || '';
+    APP_CONFIG.logo = b.logo || '';
+    APP_CONFIG.waAdmin = b.wa || A.waAdmin;
+    APP_CONFIG.warna = b.warna || '';
+    UI.tema(b.warna);
+    let ico = document.querySelector('link[rel="icon"]');
+    if (!this._ikonAsli && ico) this._ikonAsli = ico.getAttribute('href');
+    if (ico) ico.setAttribute('href', APP_CONFIG.logo || this._ikonAsli);
+    if (!Sesi.user()) document.title = APP_CONFIG.nama + (APP_CONFIG.tagline ? ' · ' + APP_CONFIG.tagline : '');
+  },
+  /** Identitas dari cache perangkat (instan), lalu disegarkan dari server. */
+  muatBrand() {
+    let b = null;
+    try { b = JSON.parse(localStorage.getItem('rl_brand') || 'null'); } catch (e) { }
+    this.terapkanBrand(b);
+    API._kirim('branding', {}, { retry: 2 }).then(baru => this.simpanBrand(baru, JSON.stringify(b))).catch(() => { });
+  },
+  simpanBrand(baru, lamaStr) {
+    const s = JSON.stringify(baru);
+    try { localStorage.setItem('rl_brand', s); } catch (e) { }
+    if (s === lamaStr) return;
+    this.terapkanBrand(baru);
+    this._shell = '';
+    if (this.ruteQR() || !Sesi.user()) this.render(); else if (!(Sesi.user().peran === 'peserta' && Sesi.user().wajib_ganti_pin)) this.tampil(); else this.render();
+  },
+
   mulai() {
+    this.muatBrand();
     window.addEventListener('hashchange', () => {
       if (this.ruteQR()) return this.render();
       if (this._qr) { this._qr = false; return this.render(); }

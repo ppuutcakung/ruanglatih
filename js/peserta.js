@@ -50,7 +50,7 @@ const Peserta = {
       title: 'Menu',
       body: '<div class="row" style="margin-bottom:16px"><div class="avatar" style="border-color:var(--blush-3)">' + esc(UI.inisial(u.nama)) + '</div><div><div class="semi">' + esc(u.nama) + '</div><div class="t-sm muted">' + esc(u.umkm) + ' · ' + esc(u.sektor) + '</div></div></div>' +
         '<div class="list">' + it('#/beranda', 'home', 'Beranda') + it('#/pelatihan', 'cap', 'Pelatihan Saya') + it('#/materi', 'book', 'Bank Materi') + it('#/nilai', 'chart', 'Riwayat & Skor Nilai') + it('#/sertifikat', 'award', 'Sertifikat') + it('#/profil', 'user', 'Profil & Ganti PIN') +
-        '<a class="item" href="' + App.linkWA('Halo Admin PPU, saya ' + (u.nama || '') + ' (' + (u.umkm || '') + ') butuh bantuan akun RuangLatih.') + '" target="_blank" rel="noopener"><div class="ic-tile sm ok">' + UI.ic('message', 'sm') + '</div><div class="grow semi">Hubungi Admin</div>' + UI.ic('chevR', 'sm') + '</a>' +
+        '<a class="item" href="' + App.linkWA('Halo Admin PPU, saya ' + (u.nama || '') + ' (' + (u.umkm || '') + ') butuh bantuan akun ' + APP_CONFIG.nama + '.') + '" target="_blank" rel="noopener"><div class="ic-tile sm ok">' + UI.ic('message', 'sm') + '</div><div class="grow semi">Hubungi Admin</div>' + UI.ic('chevR', 'sm') + '</a>' +
         '<button class="item" data-keluar><div class="ic-tile sm" style="background:var(--bad-bg);color:var(--bad)">' + UI.ic('logout', 'sm') + '</div><div class="grow semi c-bad">Keluar</div></button></div>'
     });
     $('[data-keluar]', m.el).onclick = () => { m.close(); App.keluar(); };
@@ -62,7 +62,7 @@ const Peserta = {
   // ===========================================================
   async beranda(v) {
     const u = this.user();
-    v.innerHTML = this.hero({ judul: 'RuangLatih', sub: esc(this.panggil(u)), desc: 'Semangat kembangkan usahamu hari ini!' }) +
+    v.innerHTML = this.hero({ judul: APP_CONFIG.nama, sub: esc(this.panggil(u)), desc: 'Semangat kembangkan usahamu hari ini!' }) +
       this.cari('Cari materi, jadwal, atau sertifikat…') + '<div class="m-body" style="margin-top:24px" data-isi></div>';
     this.pasangCari(v);
     const isi = $('[data-isi]', v);
@@ -492,7 +492,7 @@ const Peserta = {
       '<button class="item" data-pin><div class="ic-tile sm">' + UI.ic('key', 'sm') + '</div><div class="grow"><div class="semi">Ganti PIN</div><div class="t-xs muted">PIN 4 angka untuk masuk</div></div>' + UI.ic('chevR', 'sm') + '</button>' +
       '<a class="item" target="_blank" rel="noopener" href="' + App.linkWA('Halo Admin PPU, saya ' + (u.nama || '') + ' (' + (u.umkm || '') + ') ingin memperbarui data profil UMKM.') + '"><div class="ic-tile sm ok">' + UI.ic('message', 'sm') + '</div><div class="grow"><div class="semi">Hubungi Admin PPU</div><div class="t-xs muted">Ubah data profil, lupa PIN, pendaftaran</div></div>' + UI.ic('chevR', 'sm') + '</a>' +
       '<button class="item" data-keluar><div class="ic-tile sm" style="background:var(--bad-bg);color:var(--bad)">' + UI.ic('logout', 'sm') + '</div><div class="grow semi c-bad">Keluar</div></button></div>' +
-      '<div class="center t-xs faint">' + esc(APP_CONFIG.nama) + ' · ' + esc(APP_CONFIG.lembaga) + '</div></div>';
+      '<div class="center t-xs faint">' + esc(APP_CONFIG.footer || (APP_CONFIG.nama + ' · ' + APP_CONFIG.lembaga)) + '</div></div>';
     $('[data-pin]', v).onclick = () => App.modalGantiPin();
     $('[data-keluar]', v).onclick = () => App.keluar();
   }

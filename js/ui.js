@@ -430,6 +430,39 @@ const UI = {
     }
   },
 
+  // ---------- Identitas & tema warna ----------
+  /** Campur dua warna heksa; t = porsi warna b (0..1). */
+  campur(a, b, t) {
+    const h = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16));
+    const A = h(a), B = h(b);
+    return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  },
+  kecerahan(hex) { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; },
+  /** Terapkan warna utama ke seluruh tampilan (variabel CSS). Kosong/bawaan = palet asli. */
+  /** Palet turunan dari satu warna utama → nilai variabel CSS. null = pakai palet asli. */
+  paletTema(hex) {
+    if (!hex || !/^#[0-9a-f]{6}$/i.test(hex) || hex.toUpperCase() === '#9E3D52') return null;
+    const p = hex.toLowerCase(), press = UI.campur(p, '#000000', 0.30), sek = UI.campur(p, '#ffffff', 0.15);
+    const rgb = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)).join(', ');
+    return { '--primary': p, '--primary-press': press, '--primary-hover': UI.campur(p, '#000000', 0.12), '--secondary': sek, '--tertiary': press,
+      '--blush-0': UI.campur('#ffffff', p, 0.025), '--blush-1': UI.campur('#ffffff', p, 0.04), '--blush-2': UI.campur('#ffffff', p, 0.09), '--blush-3': UI.campur('#ffffff', p, 0.16),
+      '--blush-4': UI.campur('#ffffff', p, 0.30), '--line': UI.campur('#ffffff', p, 0.16), '--mid': UI.campur('#ffffff', p, 0.55),
+      '--hero': 'linear-gradient(135deg, ' + UI.campur(p, '#000000', 0.12) + ' 0%, ' + p + ' 55%, ' + sek + ' 100%)', '--rgb': rgb(p), '--rgb-press': rgb(press) };
+  },
+  /** Terapkan warna utama ke elemen (bawaan: seluruh aplikasi). */
+  tema(hex, el) {
+    const r = (el || document.documentElement).style, set = UI.paletTema(hex);
+    ['--primary', '--primary-press', '--primary-hover', '--secondary', '--tertiary', '--blush-0', '--blush-1', '--blush-2', '--blush-3', '--blush-4', '--line', '--mid', '--hero', '--rgb', '--rgb-press'].forEach(n => r.removeProperty(n));
+    if (set) Object.keys(set).forEach(k => r.setProperty(k, set[k]));
+    if (!el) UI._meta(set ? set['--primary'] : '#9E3D52');
+  },
+  _meta(warna) { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', warna); },
+  /** Nilai warna tema saat ini (untuk grafik & gambar kanvas). */
+  warna(n) { return (getComputedStyle(document.documentElement).getPropertyValue('--' + n) || '').trim() || { primary: '#9E3D52', 'primary-press': '#6E2D3B', secondary: '#B35467', 'blush-4': '#D8C3C8', mid: '#D08597' }[n] || '#9E3D52'; },
+  /** Logo aplikasi (unggahan admin) atau ikon bawaan. */
+  logo() { return APP_CONFIG.logo ? '<img src="' + esc(APP_CONFIG.logo) + '" alt="Logo">' : UI.ic('cap', 'lg'); },
+  kelasLogo() { return APP_CONFIG.logo ? ' img' : ''; },
+
   salin(teks) {
     const ok = () => UI.toast('Disalin: ' + teks);
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(teks).then(ok, () => UI.toast(teks, 'info'));

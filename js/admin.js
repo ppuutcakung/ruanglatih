@@ -534,7 +534,7 @@ const Admin = {
 
   /** Tampilkan PIN peserta + tombol kirim via WhatsApp. */
   tampilPin(u, pin, judul) {
-    const pesan = 'Halo ' + u.nama_pemilik + ', akun RuangLatih ' + u.nama_umkm + ' siap dipakai.\nMasuk: ' + location.origin + location.pathname + '\nPilih tab Peserta UMKM\nNama UMKM: ' + u.nama_umkm + '\nPIN: ' + pin + '\nAnda akan diminta mengganti PIN saat pertama masuk.';
+    const pesan = 'Halo ' + u.nama_pemilik + ', akun ' + APP_CONFIG.nama + ' ' + u.nama_umkm + ' siap dipakai.\nMasuk: ' + location.origin + location.pathname + '\nPilih tab Peserta UMKM\nNama UMKM: ' + u.nama_umkm + '\nPIN: ' + pin + '\nAnda akan diminta mengganti PIN saat pertama masuk.';
     UI.modal({
       title: judul || 'PIN Peserta',
       body: '<div class="center col g8"><div class="t-sm muted">' + esc(u.nama_umkm) + ' · ' + esc(u.no_hp) + '</div><div style="font-size:44px;font-weight:700;letter-spacing:.3em;color:var(--primary)">' + esc(pin) + '</div>' +
@@ -545,7 +545,7 @@ const Admin = {
   },
   /** Tampilkan kode akses instruktur + tombol kirim via WhatsApp. */
   tampilKode(i, kode, judul) {
-    const pesan = 'Halo ' + i.nama + ', berikut akses Portal Instruktur RuangLatih.\nMasuk: ' + location.origin + location.pathname + '\nPilih tab Instruktur\nNama: ' + i.nama + '\nKode akses: ' + kode;
+    const pesan = 'Halo ' + i.nama + ', berikut akses Portal Instruktur ' + APP_CONFIG.nama + '.\nMasuk: ' + location.origin + location.pathname + '\nPilih tab Instruktur\nNama: ' + i.nama + '\nKode akses: ' + kode;
     UI.modal({
       title: judul || 'Kode Akses Instruktur',
       body: '<div class="center col g8"><div class="t-sm muted">' + esc(i.nama) + (i.institusi ? ' · ' + esc(i.institusi) : '') + '</div><div style="font-size:36px;font-weight:700;letter-spacing:.12em;color:var(--primary)">' + esc(kode) + '</div>' +
@@ -823,9 +823,9 @@ const Admin = {
           const W = 1240, H = 1600, c = document.createElement('canvas'); c.width = W; c.height = H;
           const g = c.getContext('2d');
           g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
-          g.fillStyle = '#9E3D52'; g.fillRect(0, 0, W, 190);
+          g.fillStyle = UI.warna('primary'); g.fillRect(0, 0, W, 190);
           g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = 'bold 64px Arial'; g.fillText('SCAN ABSENSI', W / 2, 120);
-          g.fillStyle = '#6E2D3B'; g.font = 'bold 52px Arial';
+          g.fillStyle = UI.warna('primary-press'); g.font = 'bold 52px Arial';
           const baris = []; let l = '';
           judul.split(' ').forEach(w => { if (g.measureText(l + ' ' + w).width > W - 140) { baris.push(l); l = w; } else l = (l ? l + ' ' : '') + w; });
           baris.push(l);
@@ -842,7 +842,7 @@ const Admin = {
   },
   layarQR(judul, p, url) {
     const ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:linear-gradient(160deg,#9E3D52,#6E2D3B);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;color:#fff;text-align:center';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:linear-gradient(160deg,' + UI.warna('primary') + ',' + UI.warna('primary-press') + ');display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;color:#fff;text-align:center';
     ov.innerHTML = '<button aria-label="Tutup" style="position:absolute;top:18px;right:18px;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff" data-x>' + UI.ic('x') + '</button>' +
       '<div style="font-size:clamp(14px,2vw,20px);letter-spacing:.2em;font-weight:700;opacity:.85">SCAN ABSENSI</div><div style="font-size:clamp(22px,3.4vw,42px);font-weight:800;max-width:1000px;line-height:1.2">' + esc(judul) + '</div>' +
       '<div style="font-size:clamp(13px,1.6vw,18px);opacity:.85">' + esc(UI.rentang(p)) + ' · ' + esc(p.jam) + '</div>' +
@@ -884,9 +884,9 @@ const Admin = {
             return '<div class="card mt20"><div class="h-sm" style="margin-bottom:14px">' + JUDUL[b] + '</div><div class="col g20">' + q.map(h => h.tipe === 'teks'
               ? '<div><div class="semi t-sm">' + h.nomor + '. ' + esc(h.pertanyaan) + ' <span class="chip sm">' + h.teks.length + ' jawaban</span></div>' + (h.teks.length ? '<div class="list mt8" style="max-height:280px;overflow:auto">' + h.teks.map(t => '<div class="item" style="padding:10px 14px;align-items:flex-start"><div class="grow"><div class="t-sm">' + esc(t.isi) + '</div><div class="t-xs muted">' + esc(t.umkm) + '</div></div></div>').join('') + '</div>' : '<div class="t-sm muted mt8">Belum ada jawaban.</div>') + '</div>'
               : (() => { const tot = h.distribusi.reduce((s, x) => s + x, 0) || 1; return '<div><div class="row between top"><span class="t-sm semi">' + h.nomor + '. ' + esc(h.pertanyaan) + '</span><span class="chip ' + (h.rata >= 3 ? 'ok' : 'warn') + ' sm">' + UI.angka(h.rata, 2) + '</span></div>' +
-                '<div class="row g4 mt8" style="height:10px;border-radius:5px;overflow:hidden;gap:2px">' + h.distribusi.map((x, i) => x ? '<span title="Skala ' + (i + 1) + ': ' + x + '" style="height:100%;flex:' + x + ';background:' + ['#E8B4BF', '#D08597', '#B35467', '#6E2D3B'][i] + '"></span>' : '').join('') + (h.distribusi.every(x => !x) ? '<span style="flex:1;height:100%;background:var(--blush-2)"></span>' : '') + '</div>' +
+                '<div class="row g4 mt8" style="height:10px;border-radius:5px;overflow:hidden;gap:2px">' + h.distribusi.map((x, i) => x ? '<span title="Skala ' + (i + 1) + ': ' + x + '" style="height:100%;flex:' + x + ';background:' + [UI.warna('blush-4'), UI.warna('mid'), UI.warna('secondary'), UI.warna('primary-press')][i] + '"></span>' : '').join('') + (h.distribusi.every(x => !x) ? '<span style="flex:1;height:100%;background:var(--blush-2)"></span>' : '') + '</div>' +
                 '<div class="t-xs muted mt8">' + h.distribusi.map((x, i) => (i + 1) + ': ' + x + ' (' + Math.round(x / tot * 100) + '%)').join(' · ') + '</div></div>'; })()).join('') + '</div></div>';
-          }).join('') + '<div class="legend mt12">' + ['Sangat tidak setuju', 'Tidak setuju', 'Setuju', 'Sangat setuju'].map((s, i) => '<span><i style="background:' + ['#E8B4BF', '#D08597', '#B35467', '#6E2D3B'][i] + '"></i>' + (i + 1) + ' ' + s + '</span>').join('') + '</div>';
+          }).join('') + '<div class="legend mt12">' + ['Sangat tidak setuju', 'Tidak setuju', 'Setuju', 'Sangat setuju'].map((s, i) => '<span><i style="background:' + [UI.warna('blush-4'), UI.warna('mid'), UI.warna('secondary'), UI.warna('primary-press')][i] + '"></i>' + (i + 1) + ' ' + s + '</span>').join('') + '</div>';
         }, { el: isi });
       } catch (e) { UI.galat(isi, e, hasil); }
     };
@@ -1044,14 +1044,14 @@ const Admin = {
         '<div class="card stat"><span class="l">Hadir penuh</span><span class="v">' + (rows.length ? Math.round(penuh / rows.length * 100) : 0) + '%</span></div>' +
         '<div class="card stat"><span class="l">Rata-rata Pre → Post</span><span class="v c-primary">' + UI.angka(rata(rows.map(r => r.pre))) + ' → ' + UI.angka(rata(rows.map(r => r.post))) + '</span></div></div>' +
         (prog.length ? '<div class="grid g2" style="align-items:start"><div class="card"><div class="card-h"><div class="h-sm">Rata-rata Nilai per Program</div><span class="chip sm">' + prog.length + ' program</span></div>' + gulir(prog.length,
-          UI.grafikBatang({ w: Math.max(560, prog.length * 110), labels: prog.map(x => x.judul), maks: 100, series: [{ nama: 'Pre-test', warna: '#D8B8C0', nilai: prog.map(x => rata(x.rows.map(r => r.pre))) }, { nama: 'Post-test', warna: '#9E3D52', nilai: prog.map(x => rata(x.rows.map(r => r.post))) }] })) + '</div>' +
+          UI.grafikBatang({ w: Math.max(560, prog.length * 110), labels: prog.map(x => x.judul), maks: 100, series: [{ nama: 'Pre-test', warna: UI.warna('blush-4'), nilai: prog.map(x => rata(x.rows.map(r => r.pre))) }, { nama: 'Post-test', warna: UI.warna('primary'), nilai: prog.map(x => rata(x.rows.map(r => r.post))) }] })) + '</div>' +
           '<div class="card"><div class="card-h"><div class="h-sm">Peserta & Kelulusan per Program</div><span class="chip ok sm">' + lulus + ' lulus</span></div>' + gulir(prog.length,
-          UI.grafikBatang({ w: Math.max(560, prog.length * 110), labels: prog.map(x => x.judul), series: [{ nama: 'Peserta', warna: '#B35467', nilai: prog.map(x => x.rows.length) }, { nama: 'Lulus', warna: '#2E7D5E', nilai: prog.map(x => x.rows.filter(r => r.lulus).length) }] })) + '</div></div>' +
+          UI.grafikBatang({ w: Math.max(560, prog.length * 110), labels: prog.map(x => x.judul), series: [{ nama: 'Peserta', warna: UI.warna('secondary'), nilai: prog.map(x => x.rows.length) }, { nama: 'Lulus', warna: '#2E7D5E', nilai: prog.map(x => x.rows.filter(r => r.lulus).length) }] })) + '</div></div>' +
           '<div class="card tight"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Program</th><th>Tanggal</th><th class="num">Peserta</th><th class="num">Lulus</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Kenaikan</th></tr></thead><tbody>' +
           prog.map(x => { const a = rata(x.rows.map(r => r.pre)), b = rata(x.rows.map(r => r.post)); return '<tr><td><div class="semi">' + esc(x.judul) + '</div>' + (x.tema ? '<div class="t-xs muted">' + esc(x.tema) + '</div>' : '') + '</td><td class="t-sm">' + esc(UI.tglPendek(x.tgl)) + '</td><td class="num">' + x.rows.length + '</td><td class="num c-ok">' + x.rows.filter(r => r.lulus).length + '</td><td class="num">' + UI.angka(a) + '</td><td class="num">' + UI.angka(b) + '</td><td class="num ' + (a !== null && b !== null && b > a ? 'c-ok' : '') + '">' + (a !== null && b !== null ? (b > a ? '+' : '') + UI.angka(Math.round((b - a) * 10) / 10) : '–') + '</td></tr>'; }).join('') +
           '</tbody></table></div></div>' : '') +
         (ev.length ? '<div class="card"><div class="h-sm" style="margin-bottom:12px">Skor Evaluasi per Pelatihan (skala 1–4)</div><div style="overflow-x:auto"><div style="min-width:' + Math.max(560, ev.length * 110) + 'px">' +
-          UI.grafikBatang({ w: Math.max(640, ev.length * 120), labels: ev.map(e => e.judul), maks: 4, series: [{ nama: 'A. Materi', warna: '#E8B4BF', nilai: ev.map(e => e.A) }, { nama: 'B. Instruktur', warna: '#9E3D52', nilai: ev.map(e => e.B) }, { nama: 'C. Penyelenggaraan', warna: '#6E2D3B', nilai: ev.map(e => e.C) }] }) + '</div></div></div>' : '') +
+          UI.grafikBatang({ w: Math.max(640, ev.length * 120), labels: ev.map(e => e.judul), maks: 4, series: [{ nama: 'A. Materi', warna: UI.warna('blush-4'), nilai: ev.map(e => e.A) }, { nama: 'B. Instruktur', warna: UI.warna('primary'), nilai: ev.map(e => e.B) }, { nama: 'C. Penyelenggaraan', warna: UI.warna('primary-press'), nilai: ev.map(e => e.C) }] }) + '</div></div></div>' : '') +
         '<div class="card"><div class="card-h"><div class="h-sm">Tabel Rekap</div><span class="chip sm">' + rows.length + ' baris</span></div>' +
         (rows.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>Pelatihan</th><th class="num">Hadir</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Naik</th><th class="num">Tugas</th><th>Eval</th><th>Status</th><th>No. Sertifikat</th></tr></thead><tbody>' +
           rows.slice((hal - 1) * per, hal * per).map(r => '<tr><td><div class="semi">' + esc(r.nama_umkm) + '</div><div class="t-xs muted">' + esc(r.nama_pemilik) + '</div></td><td>' + esc(r.sektor) + '</td><td><div class="clamp1" style="max-width:220px">' + esc(r.pelatihan) + '</div><div class="t-xs muted">' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</div></td>' +
@@ -1105,7 +1105,7 @@ const Admin = {
         const qq = v => '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"';
         const csv = [['Waktu', 'Peran', 'Nama Pengguna', 'ID', 'Aktivitas']].concat(rows.map(r => [r.waktu, r.peran, r.nama || '', r.id_pengguna, r.aksi])).map(r => r.map(qq).join(';')).join('\r\n');
         const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
-        const a = document.createElement('a'); a.href = url; a.download = 'Log Aktivitas RuangLatih ' + UI.hariIni().slice(0, 7) + '.csv'; a.click();
+        const a = document.createElement('a'); a.href = url; a.download = 'Log Aktivitas ' + APP_CONFIG.nama + ' ' + UI.hariIni().slice(0, 7) + '.csv'; a.click();
         setTimeout(() => URL.revokeObjectURL(url), 30000);
       }
     });
@@ -1258,14 +1258,35 @@ const Admin = {
   // PENGATURAN
   // ===========================================================
   async pengaturan(el) {
-    el.innerHTML = Kelola.kepala('Pengaturan', 'Identitas lembaga, sertifikat, laporan, dan syarat lulus bawaan') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Pengaturan', 'Identitas aplikasi, laporan & sertifikat, dan sistem') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     UI.loading(isi, 2);
     let s;
     try { s = await API.cepat('pengaturan_get'); } catch (e) { return UI.galat(isi, e, () => this.pengaturan(el)); }
+    const B = { nama: s.NAMA_APLIKASI || 'RuangLatih', tagline: s.TAGLINE || 'Pusat Pendampingan UMKM Cakung', footer: s.TEKS_FOOTER || APP_CONFIG.footer || '',
+      logo: s.LOGO_DATA || '', warna: s.WARNA_UTAMA || '#9E3D52', wa: s.WA_ADMIN || APP_CONFIG.waAdmin || '' };
+    const waLokal = w => { w = String(w || '').replace(/\D/g, ''); return w.indexOf('62') === 0 ? '0' + w.slice(2) : w; };
+    let logo = B.logo;
+    const hitung = (id, maks) => '<span class="t-xs faint" data-hit="' + id + '">0/' + maks + '</span>';
     const sy = s.SYARAT_LULUS_DEFAULT || {};
-    isi.innerHTML = '<div class="grid g2" style="align-items:start"><div class="card col g20"><div class="h-sm">Umum & Sertifikat</div>' +
-      '<div class="field"><label>Nama lembaga</label><input class="input" name="NAMA_LEMBAGA" value="' + esc(s.NAMA_LEMBAGA) + '"></div>' +
+    const PRESET = ['#9E3D52', '#0EA5E9', '#2563EB', '#0F766E', '#16A34A', '#D97706', '#DC2626', '#7C3AED', '#334155'];
+    isi.innerHTML = '<div class="grid" style="grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start" data-dua>' +
+      '<div class="card col g20"><div><div class="h-md">Identitas Aplikasi</div><div class="t-sm muted">Perubahan langsung berlaku di semua akun (admin, instruktur, peserta) setelah disimpan.</div></div>' +
+      '<div class="field"><div class="row between"><label for="p_nama">Nama / judul aplikasi</label>' + hitung('p_nama', 40) + '</div><input class="input" id="p_nama" maxlength="40" value="' + esc(B.nama) + '"></div>' +
+      '<div class="field"><div class="row between"><label for="p_tag">Tagline</label>' + hitung('p_tag', 100) + '</div><input class="input" id="p_tag" maxlength="100" value="' + esc(B.tagline) + '" placeholder="mis. Pusat Pendampingan UMKM Cakung"></div>' +
+      '<div class="field"><span class="lbl">Logo aplikasi</span><div class="row wrap g16"><div class="logo-tile" data-logo style="width:64px;height:64px;border-radius:16px;background:var(--blush-2);color:var(--primary);display:grid;place-items:center;overflow:hidden;padding:6px"></div>' +
+      '<div class="col g8"><div class="row g8"><button class="btn secondary sm" data-aksi="pilihLogo">' + UI.ic('image', 'sm') + 'Pilih logo</button><button class="btn outline sm" data-aksi="hapusLogo">Hapus logo</button></div>' +
+      '<div class="hint">PNG / JPG / WebP, sebaiknya persegi. Dikecilkan otomatis ke 256 px.</div></div></div></div>' +
+      '<div class="field"><div class="row between"><label for="p_foot">Teks footer</label>' + hitung('p_foot', 160) + '</div><input class="input" id="p_foot" maxlength="160" value="' + esc(B.footer) + '" placeholder="mis. © 2026 PPU UT Cakung"></div>' +
+      '<div class="form-grid"><div class="field"><label for="p_hex">Warna utama</label><div class="row g8"><input type="color" id="p_warna" value="' + esc(B.warna.toLowerCase()) + '" style="width:52px;height:48px;border:1px solid var(--blush-3);border-radius:12px;padding:4px;background:#fff;cursor:pointer">' +
+      '<input class="input grow" id="p_hex" maxlength="7" value="' + esc(B.warna.toUpperCase()) + '"></div><div class="row wrap g4 mt8" data-preset>' + PRESET.map(c => '<button type="button" data-c="' + c + '" title="' + c + '" style="width:24px;height:24px;border-radius:50%;background:' + c + ';border:2px solid #fff;box-shadow:0 0 0 1px var(--blush-4)"></button>').join('') + '</div><div class="hint" data-kontras></div></div>' +
+      '<div class="field"><label for="p_wa">Nomor WhatsApp admin</label><input class="input" id="p_wa" type="tel" inputmode="tel" value="' + esc(waLokal(B.wa)) + '" placeholder="08xxxxxxxxxx"><div class="hint">Dipakai tombol "Hubungi Admin" & "Lupa PIN".</div></div></div>' +
+      '<div class="err" hidden data-err></div>' +
+      '<div class="row between wrap"><button class="btn ghost sm" data-aksi="bawaan">' + UI.ic('refresh', 'sm') + 'Kembalikan bawaan</button><button class="btn primary" data-aksi="simpanIdentitas">' + UI.ic('check', 'sm') + 'Simpan Identitas</button></div></div>' +
+      '<div class="card"><div class="h-md">Pratinjau</div><div class="t-sm muted" style="margin-bottom:14px">Halaman masuk di layar HP</div><div class="hp-mock" data-mock><div class="hp-in" data-mockisi></div></div></div></div>' +
+
+      '<div class="grid g2 mt20" style="align-items:start"><div class="card col g20"><div class="h-sm">Laporan & Sertifikat</div>' +
+      '<div class="field"><label>Nama lembaga (kop laporan)</label><input class="input" name="NAMA_LEMBAGA" value="' + esc(s.NAMA_LEMBAGA) + '"></div>' +
       '<div class="field"><label>Format nomor sertifikat</label><input class="input" name="FORMAT_NO_SERTIFIKAT" value="' + esc(s.FORMAT_NO_SERTIFIKAT || '{urut}/RL-PPU/{kode}/{bulan}/{tahun}') + '"><div class="hint">Penanda: {urut} (wajib, 001…), {kode} (kode pelatihan), {bulan} (romawi), {tahun}</div></div>' +
       '<div class="field"><label>Template laporan (link Google Sheets, opsional)</label><input class="input" name="TEMPLATE_LAPORAN_ID" value="' + esc(s.TEMPLATE_LAPORAN_ID ? 'https://docs.google.com/spreadsheets/d/' + s.TEMPLATE_LAPORAN_ID : '') + '" placeholder="Kosongkan untuk format standar"><div class="hint">Tulis {{tabel}} di sel awal tabel. Penanda lain: {{nama_lembaga}} {{judul_laporan}} {{periode}} {{judul_pelatihan}} {{sektor}} {{tanggal_cetak}} {{jumlah_peserta}} {{jumlah_lulus}}</div></div>' +
       '<div><div class="lbl" style="margin-bottom:6px">Syarat lulus bawaan (untuk pelatihan baru)</div>' + SYARAT.map(x => '<label class="check"><input type="checkbox" name="sy_' + x[0] + '"' + (sy[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div>' +
@@ -1274,8 +1295,77 @@ const Admin = {
       [['Folder utama Drive', s.folder, 'layers'], ['Folder template sertifikat', s.folder_template, 'award'], ['Spreadsheet database', s.spreadsheet, 'chart']].map(x => '<a class="item" href="' + esc(x[1]) + '" target="_blank" rel="noopener"><div class="ic-tile sm">' + UI.ic(x[2], 'sm') + '</div><div class="grow semi">' + x[0] + '</div>' + UI.ic('chevR', 'sm') + '</a>').join('') + '</div></div>' +
       '<div class="card"><div class="h-sm">Pembersihan Log Otomatis</div><div class="mt8">' + (s.log_otomatis ? '<span class="chip ok dot sm">Aktif — setiap akhir bulan</span>' : '<span class="chip warn sm">Belum aktif</span><div class="t-sm muted mt8">Jalankan fungsi <b>pasangJadwalLog</b> sekali dari editor Apps Script.</div>') + '</div></div>' +
       '<div class="card"><div class="h-sm">Koneksi API</div><div class="t-sm muted mt8" style="word-break:break-all">' + esc(GAS_URL) + '</div><div class="mt12" data-sehat><span class="chip line sm">Memeriksa…</span></div></div></div></div>';
-    App.cekServer().then(h => { const x = $('[data-sehat]', isi); if (x) x.innerHTML = h && h.siap ? '<span class="chip ok dot sm">Terhubung · versi ' + esc(h.versi) + '</span>' : '<span class="chip bad sm">Tidak terhubung / belum setup</span>'; });
+    if (window.innerWidth < 1000) $('[data-dua]', isi).style.gridTemplateColumns = '1fr';
+
+    const nilai = () => ({ nama: $('#p_nama').value.trim(), tagline: $('#p_tag').value.trim(), footer: $('#p_foot').value.trim(), warna: $('#p_hex').value.trim(), wa: $('#p_wa').value.trim(), logo: logo });
+    const pratinjau = () => {
+      const v = nilai(), w = /^#[0-9a-f]{6}$/i.test(v.warna) ? v.warna : B.warna;
+      [['p_nama', 40], ['p_tag', 100], ['p_foot', 160]].forEach(x => { const h = $('[data-hit="' + x[0] + '"]', isi); if (h) h.textContent = $('#' + x[0]).value.length + '/' + x[1]; });
+      $('[data-logo]', isi).innerHTML = logo ? '<img src="' + esc(logo) + '" alt="" style="width:100%;height:100%;object-fit:contain">' : UI.ic('cap', 'lg');
+      const mock = $('[data-mock]', isi);
+      UI.tema(w, mock);
+      const lg = logo ? '<img src="' + esc(logo) + '" alt="" style="width:100%;height:100%;object-fit:contain">' : UI.ic('cap');
+      $('[data-mockisi]', isi).innerHTML = '<div style="background:var(--hero);color:#fff;padding:22px 16px 46px;border-radius:0 0 26px 26px;text-align:center">' +
+        '<div style="width:44px;height:44px;border-radius:12px;margin:0 auto 10px;display:grid;place-items:center;overflow:hidden;' + (logo ? 'background:#fff;padding:4px' : 'background:rgba(255,255,255,.18)') + '">' + lg + '</div>' +
+        '<div style="font-weight:800;font-size:20px;line-height:1.2">' + esc(v.nama || 'Nama aplikasi') + '</div><div style="font-size:11.5px;opacity:.9;margin-top:4px">' + esc(v.tagline) + '</div></div>' +
+        '<div style="margin:-30px 14px 0;background:#fff;border-radius:16px;box-shadow:var(--shadow-up);padding:14px">' +
+        '<div class="seg" style="padding:3px"><button style="height:28px;font-size:10px;padding:0 4px" class="on">Peserta UMKM</button><button style="height:28px;font-size:10px;padding:0 4px">Instruktur</button><button style="height:28px;font-size:10px;padding:0 4px">Admin</button></div>' +
+        '<div style="height:34px;border-radius:10px;background:var(--blush-1);border:1px solid var(--blush-3);margin-top:12px;font-size:11px;color:var(--ink-3);display:flex;align-items:center;padding:0 10px">Nama UMKM / Usaha</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px">' + [1, 2, 3, 4].map(() => '<div style="height:36px;border-radius:10px;background:var(--blush-1);border:1px solid var(--blush-3)"></div>').join('') + '</div>' +
+        '<div style="height:36px;border-radius:99px;background:var(--primary);color:#fff;font-weight:700;font-size:12px;display:grid;place-items:center;margin-top:12px">Masuk</div>' +
+        '<div style="text-align:center;font-size:11px;color:var(--primary);font-weight:700;margin-top:10px">Lupa PIN? Hubungi Admin' + (v.wa ? ' (' + esc(v.wa) + ')' : '') + '</div></div>' +
+        '<div style="text-align:center;font-size:10.5px;color:var(--ink-3);padding:16px 14px">' + esc(v.footer) + '</div>';
+      const k = $('[data-kontras]', isi);
+      k.innerHTML = /^#[0-9a-f]{6}$/i.test(v.warna) ? (UI.kecerahan(v.warna) > 0.45 ? '<span class="c-warn">⚠ Warna terlalu terang — tulisan putih di tombol sulit dibaca.</span>' : '') : '<span class="c-bad">Kode warna harus format #RRGGBB.</span>';
+    };
+    ['#p_nama', '#p_tag', '#p_foot', '#p_wa'].forEach(id => $(id, isi).addEventListener('input', pratinjau));
+    $('#p_warna', isi).addEventListener('input', e => { $('#p_hex').value = e.target.value.toUpperCase(); pratinjau(); });
+    $('#p_hex', isi).addEventListener('input', e => { let v = e.target.value.trim(); if (v && v[0] !== '#') v = '#' + v; if (/^#[0-9a-f]{6}$/i.test(v)) $('#p_warna').value = v.toLowerCase(); pratinjau(); });
+    $('[data-preset]', isi).onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; $('#p_hex').value = b.dataset.c; $('#p_warna').value = b.dataset.c.toLowerCase(); pratinjau(); };
+    pratinjau();
+
+    /** Logo → persegi 256 px (WebP/PNG) agar ringan disimpan & cepat tampil. */
+    const olahLogo = async file => {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Gambar tidak bisa dibaca.')); i.src = url; });
+        for (const uk of [256, 192, 160, 128]) {
+          const c = document.createElement('canvas'); c.width = c.height = uk;
+          const g = c.getContext('2d'), sk = Math.min(uk / img.width, uk / img.height), w = img.width * sk, h = img.height * sk;
+          g.drawImage(img, (uk - w) / 2, (uk - h) / 2, w, h);
+          let d = c.toDataURL('image/webp', 0.9);
+          if (d.indexOf('data:image/webp') !== 0) d = c.toDataURL('image/png');
+          if (d.length <= 45000) return d;
+        }
+        throw new Error('Logo terlalu rumit untuk diperkecil. Coba file yang lebih sederhana.');
+      } finally { URL.revokeObjectURL(url); }
+    };
     UI.klik(isi, {
+      pilihLogo: async () => {
+        const f = (await UI.pilihFile('image/png,image/jpeg,image/webp', false))[0];
+        if (!f) return;
+        if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return UI.toast('Gunakan file PNG, JPG, atau WebP.', 'bad');
+        try { logo = await olahLogo(f); pratinjau(); UI.toast('Logo siap — klik Simpan Identitas untuk menerapkan.', 'info'); } catch (e) { UI.gagal(e); }
+      },
+      hapusLogo: () => { logo = ''; pratinjau(); },
+      bawaan: () => {
+        $('#p_nama').value = 'RuangLatih'; $('#p_tag').value = 'Pusat Pendampingan UMKM Cakung'; $('#p_foot').value = '© ' + new Date().getFullYear() + ' PPU UT Cakung · Pusat Pendampingan UMKM Cakung';
+        $('#p_hex').value = '#9E3D52'; $('#p_warna').value = '#9e3d52'; logo = ''; pratinjau();
+        UI.toast('Isian dikembalikan ke bawaan — klik Simpan Identitas untuk menerapkan.', 'info');
+      },
+      simpanIdentitas: async b => {
+        const v = nilai(), err = $('[data-err]', isi);
+        err.hidden = true;
+        const salah = !v.nama ? 'Nama aplikasi wajib diisi.' : !/^#[0-9a-f]{6}$/i.test(v.warna) ? 'Kode warna harus format #RRGGBB, mis. #9E3D52.' : (v.wa && !/^(\+?62|0)8\d{7,12}$/.test(v.wa.replace(/[\s-]/g, ''))) ? 'Nomor WhatsApp admin tidak valid.' : '';
+        if (salah) { err.textContent = salah; err.hidden = false; return; }
+        try {
+          await UI.sibuk(b, async () => {
+            const r = await API.call('pengaturan_simpan', { NAMA_APLIKASI: v.nama, TAGLINE: v.tagline, TEKS_FOOTER: v.footer, WARNA_UTAMA: v.warna.toUpperCase(), WA_ADMIN: v.wa, LOGO_DATA: logo });
+            UI.toast('Identitas aplikasi diperbarui.');
+            App.simpanBrand(r.identitas, JSON.stringify({}));
+          }, 'Menyimpan…');
+        } catch (e) { err.textContent = e.message; err.hidden = false; }
+      },
       simpan: async b => {
         const v = n => $('[name="' + n + '"]', isi);
         const data = { NAMA_LEMBAGA: v('NAMA_LEMBAGA').value, FORMAT_NO_SERTIFIKAT: v('FORMAT_NO_SERTIFIKAT').value, TEMPLATE_LAPORAN_ID: v('TEMPLATE_LAPORAN_ID').value.trim(), SYARAT_LULUS_DEFAULT: {} };
@@ -1283,7 +1373,9 @@ const Admin = {
         try { await UI.sibuk(b, async () => { const r = await API.call('pengaturan_simpan', data); UI.toast(r.message); }); } catch (e) { UI.gagal(e); }
       }
     });
+    App.cekServer().then(h => { const x = $('[data-sehat]', isi); if (x) x.innerHTML = h && h.siap ? '<span class="chip ok dot sm">Terhubung · versi ' + esc(h.versi) + '</span>' : '<span class="chip bad sm">Tidak terhubung / belum setup</span>'; });
   },
+
 
   // ===========================================================
   // PENCARIAN GLOBAL

@@ -175,7 +175,7 @@ Bila masih tampil versi lama: **Ctrl+Shift+R** atau buka mode Incognito.
 
 ## BAGIAN D — Langkah pertama memakai aplikasi (Admin)
 
-1. **Pengaturan** → cek nama lembaga dan format nomor sertifikat.
+1. **Pengaturan** → **Identitas Aplikasi** (nama, tagline, logo, teks footer, warna utama, nomor WA admin) lalu cek nama lembaga dan format nomor sertifikat. Nomor WA di sini menggantikan `waAdmin` di `config.js`.
 2. **Instruktur** → Tambah Instruktur → bagikan **nama + kode akses** kepada instruktur.
 3. **Peserta** → Tambah UMKM satu per satu, atau **Impor** (salin kolom dari Excel/Google Form: nama_umkm, nama_pemilik, sektor, spesialisasi, no_hp, alamat, pin, gender). **Nama UMKM harus unik** karena dipakai peserta untuk masuk (Nama UMKM + PIN 4 angka).
 4. **Manajemen Akses** → kirim info akses (Nama UMKM + PIN) ke peserta lewat tombol WhatsApp; kirim kode akses ke instruktur.
