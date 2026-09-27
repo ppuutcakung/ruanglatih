@@ -98,7 +98,7 @@ const SKEMA = {
 // ============================================
 function doGet(e) {
   // Cek kesehatan API: buka URL /exec di browser
-  return json({ success: true, app: APP_NAME, versi: VERSI, waktu: now(), siap: !!CONFIG.SPREADSHEET_ID });
+  return json({ success: true, app: APP_NAME, versi: VERSI, waktu: now(), siap: !!CONFIG.SPREADSHEET_ID, sumber: CONFIG.prop('DATA_SUMBER') === 'firebase' ? 'firebase' : 'spreadsheet' });
 }
 
 function doPost(e) {
@@ -127,7 +127,8 @@ function doPost(e) {
       cc.put(rid, 'RUN', 600);
     }
     let data;
-    const fbMode = p.mode === 'firebase' && typeof FB !== 'undefined' && FB.siap();
+    // Mode Firebase: diminta klien, ATAU sudah dialihkan resmi (DATA_SUMBER=firebase) → semua permintaan ke Firestore
+    const fbMode = (p.mode === 'firebase' || CONFIG.prop('DATA_SUMBER') === 'firebase') && typeof FB !== 'undefined' && FB.siap();
     try { data = fbMode ? denganCermin(p.action, p.data || {}, sesi, () => r.fn(p.data || {}, sesi)) : r.fn(p.data || {}, sesi); }
     catch (e) { if (rid) cc.remove(rid); throw e; }
     SCACHE.terapkan();
@@ -941,6 +942,7 @@ function bersihkanLogBulanan() {
   const hi = hariIni(), bulanIni = hi.slice(0, 7);
   const t = hi.split('-').map(Number);
   const akhirBulan = new Date(t[0], t[1], 0).getDate() === t[2];
+  if (CONFIG.prop('DATA_SUMBER') === 'firebase' && typeof FB !== 'undefined' && FB.siap()) bersihkanLogFirestore(akhirBulan, bulanIni);
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(60000)) return;
   try {
@@ -1832,6 +1834,8 @@ function aksiPengaturanGet(d, s) {
   o.folder_template = 'https://drive.google.com/drive/folders/' + CONFIG.FOLDER_TEMPLATE;
   o.spreadsheet = 'https://docs.google.com/spreadsheets/d/' + CONFIG.SPREADSHEET_ID;
   try { o.log_otomatis = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'bersihkanLogBulanan'); } catch (e) { o.log_otomatis = null; }
+  o.sumber_data = CONFIG.prop('DATA_SUMBER') === 'firebase' ? 'firebase' : 'spreadsheet';
+  o.cadangan_terakhir = CONFIG.prop('FIREBASE_CADANGAN_TERAKHIR') || '';
   return o;
 }
 function idDariLink(v) {

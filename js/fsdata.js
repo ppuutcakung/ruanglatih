@@ -8,7 +8,7 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '3.0', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '3.1', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
