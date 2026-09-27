@@ -784,8 +784,11 @@ const Admin = {
     };
     UI.klik(el, {
       segar: b => UI.sibuk(b, async () => { await API.call('pelatihan_detail', { id_pelatihan: idPel }); muat(); }).catch(UI.gagal),
-      qr: () => {
-        if (!idPel || !detAbs || !detAbs.qr_kode) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
+      qr: async b => {
+        if (!idPel || !detAbs) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
+        if (!detAbs.qr_kode) { // pelatihan baru (mode Firebase): kode rahasia dibuat server
+          try { await UI.sibuk(b, async () => { detAbs.qr_kode = (await API.call('qr_kode', { id_pelatihan: idPel })).qr_kode; }); } catch (e) { return UI.gagal(e); }
+        }
         this.modalQR(detAbs.pelatihan, detAbs.qr_kode);
       },
       pdf: b => {

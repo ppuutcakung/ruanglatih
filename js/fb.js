@@ -4,7 +4,7 @@
    dari GAS, dan halaman uji "#/uji-firebase" untuk memeriksa login
    serta aturan keamanan per peran. Belum mengubah sumber data aplikasi.
    ============================================================= */
-const FBC = {
+var FBC = {
   VER: '10.12.2', _siap: null, db: null, auth: null,
 
   aktif() { return typeof FIREBASE_CONFIG !== 'undefined' && !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey); },
@@ -52,6 +52,11 @@ const FBC = {
     const s = Sesi.user() || {};
     el.innerHTML = '<div class="page-h"><div><div class="crumb">Migrasi Firebase · Fase 2</div><div class="h-lg">Uji Koneksi & Keamanan Firebase</div></div>' +
       '<button class="btn primary sm" data-ulang>' + UI.ic('refresh', 'sm') + 'Uji ulang</button></div>' +
+      '<div class="card row between wrap" style="margin-bottom:20px"><div><div class="h-sm">Sumber data perangkat ini</div><div class="t-sm muted">' +
+      (API.modeFB() ? '<b class="c-ok">Firebase</b> — aplikasi membaca & menulis ke Firestore.' : '<b>Spreadsheet</b> (normal). Aktifkan mode uji untuk mencoba aplikasi di atas Firebase <b>hanya di perangkat ini</b>.') + '</div>' +
+      (API.modeFB() && typeof MODE_DATA !== 'undefined' && MODE_DATA === 'firebase' ? '' : '<div class="hint mt8">Mode uji memakai salinan data di Firestore. Data yang diubah saat uji <b>tidak</b> masuk ke Spreadsheet.</div>') + '</div>' +
+      (typeof MODE_DATA !== 'undefined' && MODE_DATA === 'firebase' ? '<span class="chip ok">Firebase aktif untuk semua</span>' :
+        '<button class="btn ' + (API.modeFB() ? 'outline' : 'primary') + ' sm" data-mode>' + (API.modeFB() ? 'Kembali ke Spreadsheet' : 'Aktifkan Mode Firebase (uji)') + '</button>') + '</div>' +
       '<div class="card"><div class="t-sm muted" style="margin-bottom:12px">Masuk sebagai <b>' + esc(s.nama || '-') + '</b> (' + esc(s.peran || '-') + '). Setiap baris harus ✅ — termasuk yang <i>seharusnya ditolak</i>.</div><div class="list" data-hasil></div><div class="mt12" data-ringkas></div></div>';
     const box = $('[data-hasil]', el);
     const tampil = (nama, harap, ok, ket) => {
@@ -113,6 +118,13 @@ const FBC = {
       $('[data-ringkas]', el).innerHTML = '<div class="card well tight row between"><span class="semi">' + lulus + ' dari ' + total + ' uji berhasil</span>' + (lulus === total ? '<span class="chip ok">Siap lanjut</span>' : '<span class="chip bad">Perlu diperiksa</span>') + '</div>';
     };
     $('[data-ulang]', el).onclick = e => UI.sibuk(e.currentTarget, jalan);
+    const bm = $('[data-mode]', el);
+    if (bm) bm.onclick = () => {
+      const ke = API.modeFB() ? '' : 'firebase';
+      try { if (ke) localStorage.setItem('rl_mode', ke); else localStorage.removeItem('rl_mode'); } catch (e) { }
+      Simpan.hapusSemua();
+      location.hash = '#/'; location.reload();
+    };
     jalan();
   }
 };

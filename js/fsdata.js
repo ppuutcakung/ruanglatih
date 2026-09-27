@@ -1,0 +1,200 @@
+/* =============================================================
+   RuangLatih — fsdata.js  (Migrasi Firebase · Fase 3)
+   Mode Firebase di browser:
+   • Salinan data realtime dari Firestore (onSnapshot) sesuai hak peran.
+   • Aksi rutin dijalankan LANGSUNG di perangkat oleh mesin.js (logika
+     yang sama dengan server) → hasil instan, tanpa menunggu GAS.
+   • Perubahan ditulis ke Firestore (batch); aturan keamanan tetap berlaku.
+   • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
+   ============================================================= */
+var FSD = {
+  VERSI: '3.0', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
+
+  // ---------- Aksi yang dijalankan di perangkat ----------
+  BACA: ['pelatihan_list', 'pelatihan_detail', 'materi_list', 'soal_list', 'tugas_list', 'nilai_rekap', 'dasbor_instruktur', 'dasbor_admin',
+    'draft_list', 'umkm_list', 'umkm_riwayat', 'instruktur_list', 'eval_form', 'eval_hasil', 'log_list', 'laporan_data',
+    'p_beranda', 'p_pelatihan', 'p_ruang', 'p_soal', 'p_eval_form', 'p_materi', 'p_riwayat', 'p_sertifikat', 'multi'],
+  TULIS: ['pelatihan_simpan', 'pelatihan_hapus', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',
+    'peserta_hapus', 'umkm_status', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan', 'tugas_hapus', 'tugas_nilai',
+    'eval_simpan_form', 'eval_salin', 'p_absen', 'p_kirim_eval'],
+  /** true bila aksi ini dijalankan di perangkat (bukan di GAS). */
+  lokal(action, d) {
+    d = d || {};
+    if (action === 'umkm_simpan') return !!d.id_umkm; // UMKM baru butuh PIN dari server
+    if (action === 'instruktur_simpan') return !!d.id_instruktur && !d.kode_baru && d.kode_akses === undefined;
+    return this.BACA.indexOf(action) >= 0 || this.TULIS.indexOf(action) >= 0;
+  },
+
+  // ---------- Sumber data untuk mesin.js ----------
+  kol(c) { const m = this.data[c]; return m ? Array.from(m.values()) : []; },
+
+  /** Muat mesin + masuk Firebase + pasang pendengar realtime (sekali per sesi). */
+  mulai() {
+    const u = Sesi.user();
+    if (!u) return Promise.reject(new Error('Belum masuk.'));
+    if (this._siap && this._uid === u.peran + ':' + u.id) return this._siap;
+    this.berhenti();
+    this._uid = u.peran + ':' + u.id;
+    this._siap = (async () => {
+      await Promise.all([FBC.pastikanMasuk(), window.MESIN ? null : UI.muatSkrip('js/mesin.js?v=' + this.VERSI)]);
+      const db = FBC.db, uid = String(u.id), tunggu = [];
+      const kol = (key, q, col) => tunggu.push(this.dengar(key, q, col));
+      const dok = (key, ref, col) => tunggu.push(this.dengarDok(key, ref, col));
+      dok('pengaturan', db.doc('pengaturan/umum'), 'pengaturan');
+      kol('materi', db.collection('materi'), 'materi');
+      if (u.peran === 'admin') {
+        ['pelatihan', 'pendaftaran', 'umkm', 'akun_umkm', 'instruktur', 'akun_instruktur', 'pelatihan_rahasia', 'soal', 'kunci_soal', 'tugas',
+          'pengumpulan', 'evaluasi_form', 'evaluasi_jawaban', 'draft_pelatihan'].forEach(c => kol(c, db.collection(c), c));
+        kol('log', db.collection('log').orderBy('waktu', 'desc').limit(1000), 'log');
+      } else if (u.peran === 'instruktur') {
+        kol('pelatihan', db.collection('pelatihan').where('id_instruktur', '==', uid), 'pelatihan');
+        kol('pendaftaran', db.collection('pendaftaran').where('id_instruktur', '==', uid), 'pendaftaran');
+        dok('instruktur', db.doc('instruktur/' + uid), 'instruktur');
+      } else {
+        kol('pendaftaran', db.collection('pendaftaran').where('id_umkm', '==', uid), 'pendaftaran');
+        kol('pelatihan', db.collection('pelatihan'), 'pelatihan');
+        dok('umkm', db.doc('umkm/' + uid), 'umkm');
+        kol('pengumpulan', db.collection('pengumpulan').where('id_umkm', '==', uid), 'pengumpulan');
+        dok('evalDEFAULT', db.doc('evaluasi_form/DEFAULT'), 'evaluasi_form');
+      }
+      await Promise.all(tunggu);
+      await this.perPelatihan();
+      this._aktif = true;
+      return true;
+    })();
+    this._siap.catch(() => { this._siap = null; });
+    return this._siap;
+  },
+
+  /** Data per pelatihan (soal, tugas, dst.) untuk pelatihan milik instruktur / yang diikuti peserta. */
+  perPelatihan() {
+    const u = Sesi.user();
+    if (!u || u.peran === 'admin' || !FBC.db) return Promise.resolve();
+    const db = FBC.db, ids = u.peran === 'instruktur' ? this.kol('pelatihan').map(p => p._id) : this.kol('pendaftaran').map(r => r.id_pelatihan);
+    const baru = ids.filter(id => !this._pel[id]);
+    const tunggu = [];
+    baru.forEach(id => {
+      this._pel[id] = 1;
+      tunggu.push(this.dengar('soal:' + id, db.collection('soal').where('id_pelatihan', '==', id), 'soal'));
+      tunggu.push(this.dengar('tugas:' + id, db.collection('tugas').where('id_pelatihan', '==', id), 'tugas'));
+      if (u.peran === 'instruktur') {
+        tunggu.push(this.dengarDok('kunci:' + id, db.doc('kunci_soal/' + id), 'kunci_soal'));
+        tunggu.push(this.dengar('kumpul:' + id, db.collection('pengumpulan').where('id_pelatihan', '==', id), 'pengumpulan'));
+      } else tunggu.push(this.dengarDok('eval:' + id, db.doc('evaluasi_form/' + id), 'evaluasi_form'));
+    });
+    return Promise.all(tunggu);
+  },
+
+  _simpanDok(col, id, isi, key) {
+    const m = this.data[col] || (this.data[col] = new Map());
+    if (isi) m.set(id, Object.assign(isi, { _id: id }));
+    else {
+      // hapus hanya bila tidak ada pendengar lain yang memuat dokumen ini
+      const lain = Object.keys(this._src).some(k => k !== key && this._src[k].col === col && this._src[k].ids.has(id));
+      if (!lain) m.delete(id);
+    }
+  },
+  dengar(key, q, col) {
+    return new Promise(res => {
+      let awal = true;
+      this._src[key] = { col: col, ids: new Set() };
+      const off = q.onSnapshot(snap => {
+        const lama = this._src[key].ids, baru = new Set();
+        snap.docs.forEach(d => { baru.add(d.id); this._simpanDok(col, d.id, d.data(), key); });
+        this._src[key].ids = baru;
+        lama.forEach(id => { if (!baru.has(id)) this._simpanDok(col, id, null, key); });
+        if (awal) { awal = false; res(); } else this.berubah(col);
+      }, err => { console.warn('Firestore', key, err && err.code); if (awal) { awal = false; res(); } });
+      this._off.push(off);
+    });
+  },
+  dengarDok(key, ref, col) {
+    return new Promise(res => {
+      let awal = true;
+      this._src[key] = { col: col, ids: new Set([ref.id]) };
+      const off = ref.onSnapshot(d => {
+        this._simpanDok(col, ref.id, d.exists ? d.data() : null, key);
+        if (awal) { awal = false; res(); } else this.berubah(col);
+      }, err => { console.warn('Firestore', key, err && err.code); if (awal) { awal = false; res(); } });
+      this._off.push(off);
+    });
+  },
+
+  /** Data berubah (oleh pengguna lain / perangkat lain / diri sendiri) → segarkan tampilan hidup. */
+  berubah(col) {
+    this._versi++;
+    if (col === 'pelatihan' || col === 'pendaftaran') this.perPelatihan();
+    clearTimeout(this._t);
+    this._t = setTimeout(() => { Simpan.hapusSemua(); if (window.App && App.segarkanDiam) App.segarkanDiam(); }, 300);
+  },
+
+  berhenti() {
+    this._off.forEach(f => { try { f(); } catch (e) { } });
+    this._off = []; this.data = {}; this._src = {}; this._pel = {}; this._siap = null; this._uid = ''; this._aktif = false;
+  },
+
+  // ---------- Jalankan aksi di perangkat ----------
+  async jalankan(action, data) {
+    await this.mulai();
+    const u = Sesi.user();
+    const sesi = { r: u.peran, id: u.id, n: u.nama, u: u.umkm, s: u.sektor, gp: !!u.wajib_ganti_pin };
+    const r = MESIN.jalankan(this, action, data || {}, sesi);
+    if (r.tulisan.length) { this.terapkanLokal(r.tulisan); await this.tulis(r.tulisan); }
+    return JSON.parse(JSON.stringify(r.hasil));
+  },
+
+  /** Terapkan perubahan ke salinan lokal SEKETIKA (halaman berikutnya langsung melihat data baru). */
+  terapkanLokal(W) {
+    const salin = v => JSON.parse(JSON.stringify(v, (k, x) => (x && x.__hapus ? undefined : x)));
+    W.forEach(w => {
+      const m = this.data[w.col] || (this.data[w.col] = new Map());
+      if (w.hapus) { m.delete(w.id); return; }
+      if (w.set) { m.set(w.id, Object.assign(salin(w.set), { _id: w.id })); return; }
+      const d = m.get(w.id) || { _id: w.id };
+      w.ubah.forEach(p => {
+        let o = d;
+        p[0].forEach((k, i) => {
+          if (i === p[0].length - 1) { if (p[1] && p[1].__hapus) delete o[k]; else o[k] = p[1] && typeof p[1] === 'object' ? salin(p[1]) : p[1]; }
+          else o = (o[k] = o[k] && typeof o[k] === 'object' ? o[k] : {});
+        });
+      });
+      m.set(w.id, d);
+    });
+    this._versi++;
+  },
+
+  /** Kirim tulisan hasil terjemahan ke Firestore (batch ≤ 450). */
+  async tulis(W) {
+    const db = FBC.db, FV = firebase.firestore.FieldValue;
+    const bersih = v => {
+      if (v === undefined) return null;
+      if (v && v.__hapus) return FV.delete();
+      if (Array.isArray(v)) return v.map(bersih);
+      if (v && typeof v === 'object') { const o = {}; Object.keys(v).forEach(k => o[k] = bersih(v[k])); return o; }
+      return v;
+    };
+    const kirim = [];
+    for (let i = 0; i < W.length; i += 450) {
+      const b = db.batch();
+      W.slice(i, i + 450).forEach(w => {
+        const ref = db.collection(w.col).doc(String(w.id));
+        if (w.hapus) b.delete(ref);
+        else if (w.set) b.set(ref, bersih(w.set));
+        else {
+          const isi = {};
+          w.ubah.forEach(p => { let o = isi; p[0].forEach((k, j) => { if (j === p[0].length - 1) o[k] = bersih(p[1]); else o = (o[k] = o[k] && typeof o[k] === 'object' ? o[k] : {}); }); });
+          b.set(ref, isi, { merge: true });
+        }
+      });
+      kirim.push(b.commit());
+    }
+    // Offline: perubahan sudah tersimpan di perangkat & terkirim otomatis saat sinyal kembali
+    const semua = Promise.all(kirim).catch(e => { throw new Error((e && e.code) === 'permission-denied' ? 'Perubahan ditolak: Anda tidak memiliki hak untuk data ini.' : 'Gagal menyimpan ke Firebase: ' + ((e && e.message) || e)); });
+    const hasil = await Promise.race([semua.then(() => 'ok'), new Promise(r => setTimeout(() => r('lambat'), 6000))]);
+    if (hasil === 'lambat') {
+      if (navigator.onLine === false) { semua.catch(e => UI.toast(e.message, 'bad')); return; } // tersimpan di perangkat, dikirim saat online
+      await semua;
+    }
+  }
+};

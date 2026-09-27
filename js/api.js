@@ -34,7 +34,7 @@ const TULIS = {
   pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
   admin_simpan: 'admin', admin_hapus: 'admin', sert_template: 'sert', sert_terbitkan: 'sert',
-  p_absen: 'absen', qr_absen: 'absen', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'
+  p_absen: 'absen', qr_absen: 'absen', qr_kode: 'pel', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'
 };
 
 // Aksi yang memang bisa lama di server (PDF, unggah, sertifikat) → batas waktu lebih longgar
@@ -92,9 +92,10 @@ const API = {
     if (!GAS_URL || GAS_URL.indexOf('TEMPEL_') >= 0) throw new Error('GAS_URL belum diisi di js/config.js');
     const k = BACA[action] ? Simpan.kunci(action, data) : null;
     if (k && this._jalan[k] && !opt.onRetry) return this._jalan[k]; // dedupe permintaan baca yang sama
-    const p = this._kirim(action, data, opt).then(d => {
+    const lokal = this.modeFB() && window.FSD && FSD.lokal(action, data);
+    const p = (lokal ? FSD.jalankan(action, data) : this._kirim(action, data, opt)).then(d => {
       if (k) Simpan.set(k, d);
-      if (TULIS[action]) { Simpan.basikan(TULIS[action]); this.panaskanNanti(); }
+      if (TULIS[action]) { Simpan.basikan(TULIS[action]); if (!this.modeFB()) this.panaskanNanti(); }
       return d;
     });
     if (k) { this._jalan[k] = p; p.then(() => delete this._jalan[k], () => delete this._jalan[k]); }
@@ -111,7 +112,7 @@ const API = {
     const maks = opt.retry === undefined ? 4 : opt.retry;
     const tulis = !!TULIS[action] || opt.tulis;
     const rid = tulis ? (opt.rid || (Date.now().toString(36) + Math.random().toString(36).slice(2, 10))) : '';
-    const body = JSON.stringify({ action, token: Sesi.token(), data, rid: rid || undefined });
+    const body = JSON.stringify({ action, token: Sesi.token(), data, rid: rid || undefined, mode: this.modeFB() ? 'firebase' : undefined });
     const batas = LAMA[action] ? 330000 : (tulis ? 45000 : 30000);
     for (let n = 0; ; n++) {
       let j;
@@ -183,7 +184,13 @@ const API = {
   },
 
   /** Panaskan data semua menu peran ini di latar belakang → perpindahan menu instan. */
+  /** Sumber data: Firebase bila MODE_DATA='firebase' (config.js) atau mode uji aktif di perangkat ini. */
+  modeFB() {
+    if (typeof MODE_DATA !== 'undefined' && MODE_DATA === 'firebase') return true;
+    try { return localStorage.getItem('rl_mode') === 'firebase'; } catch (e) { return false; }
+  },
   async panaskan(ringan) {
+    if (this.modeFB()) { if (Sesi.user() && window.FSD) FSD.mulai().catch(() => { }); return; } // Firebase: data sudah sinkron realtime
     const u = Sesi.user();
     if (!u || (u.peran === 'peserta' && u.wajib_ganti_pin) || this._panas) return;
     this._panas = true;

@@ -43,9 +43,28 @@ var App = {
   async keluar() {
     if (!await UI.konfirmasi('Keluar dari ' + APP_CONFIG.nama + ' di perangkat ini?', { ok: 'Keluar' })) return;
     sessionStorage.clear();
+    if (window.FSD) FSD.berhenti();
     FBC.keluar();
     this.keMasuk();
     UI.toast('Anda sudah keluar.', 'info');
+  },
+
+  /**
+   * Mode Firebase: data berubah (realtime) → gambar ulang halaman "hidup" tanpa mengganggu
+   * (tidak saat jendela/form terbuka atau sedang mengetik; posisi gulir dipertahankan).
+   */
+  HIDUP: { admin: ['dasbor', 'absensi', 'tes', 'pelatihan', 'tugas'], instruktur: ['dasbor', 'tugas', 'nilai', 'soal'], peserta: ['beranda', 'pelatihan', 'ruang', 'sertifikat', 'nilai'] },
+  segarkanDiam() {
+    const u = Sesi.user();
+    if (!u || this.ruteQR() || $('.overlay')) return;
+    // pengguna baru saja mengetuk/mengetik → tunda agar klik tidak "hilang" karena halaman digambar ulang
+    if (Date.now() - (this._sentuh || 0) < 2000) { clearTimeout(this._tunda); this._tunda = setTimeout(() => this.segarkanDiam(), 1500); return; }
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+    const r = location.hash.replace(/^#\/?/, '').split('/')[0] || this.awal();
+    if ((this.HIDUP[u.peran] || []).indexOf(r) < 0) return;
+    const y = window.scrollY;
+    this.tampil().then(() => setTimeout(() => window.scrollTo(0, y), 30));
   },
 
   setBadge(kunci, n) {
@@ -408,6 +427,7 @@ var App = {
   },
 
   mulai() {
+    ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { this._sentuh = Date.now(); }, true));
     this.muatBrand();
     window.addEventListener('hashchange', () => {
       if (this.ruteQR()) return this.render();
@@ -420,6 +440,7 @@ var App = {
       return;
     }
     this.render();
+    if (API.modeFB()) { const pil = document.createElement('div'); pil.textContent = (typeof MODE_DATA !== 'undefined' && MODE_DATA === 'firebase') ? '' : 'Mode Firebase · uji'; if (pil.textContent) { pil.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:300;background:#1f2937;color:#fff;font-size:11px;font-weight:700;padding:5px 10px;border-radius:99px;opacity:.85;pointer-events:none'; document.body.appendChild(pil); } }
     if (Sesi.user() && !this.ruteQR()) setTimeout(() => API.panaskan(), 600); // ⚡ panaskan data menu di latar
     // Segarkan lagi saat aplikasi dibuka kembali dari latar belakang (HP)
     document.addEventListener('visibilitychange', () => { if (!document.hidden && Sesi.user()) API.panaskanNanti(); });
