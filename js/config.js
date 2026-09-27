@@ -12,3 +12,12 @@ const APP_CONFIG = {
   // Nomor WhatsApp admin PPU untuk tombol "Hubungi Admin" (format 62…)
   waAdmin: '6285738340977'
 };
+// Firebase (migrasi database) — konfigurasi aplikasi web, aman dibagikan.
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCKdxo3Y7QEcGKnkELe6OCrbB3nVWasRao',
+  authDomain: 'ruanglatih-ppu-cakung.firebaseapp.com',
+  projectId: 'ruanglatih-ppu-cakung',
+  storageBucket: 'ruanglatih-ppu-cakung.firebasestorage.app',
+  messagingSenderId: '645604301604',
+  appId: '1:645604301604:web:99edcbec545e49cbeff1b1'
+};
