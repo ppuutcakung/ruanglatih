@@ -43,6 +43,7 @@ var App = {
   async keluar() {
     if (!await UI.konfirmasi('Keluar dari ' + APP_CONFIG.nama + ' di perangkat ini?', { ok: 'Keluar' })) return;
     sessionStorage.clear();
+    FBC.keluar();
     this.keMasuk();
     UI.toast('Anda sudah keluar.', 'info');
   },
@@ -145,6 +146,7 @@ var App = {
         await UI.sibuk(btn, async ubah => {
           const r = await API.call('login', data, { onRetry: n => ubah('Server sibuk, mencoba lagi (' + n + ')…') });
           Sesi.set({ token: r.token, user: r.user });
+          if (r.fb_token && FBC.aktif()) FBC.masuk(r.fb_token).catch(() => { }); // Firebase (migrasi) — di latar
         }, 'Memeriksa…');
         location.hash = '#/' + this.awal();
         this.render();
@@ -194,6 +196,7 @@ var App = {
         await UI.sibuk($('[data-kirim]', f), async () => {
           const r = await API.call('ganti_pin', { pin_lama: lama, pin_baru: baru });
           Sesi.set({ token: r.token, user: r.user });
+          if (r.fb_token && FBC.aktif()) FBC.masuk(r.fb_token).catch(() => { });
           UI.toast(r.message);
         }, 'Menyimpan…');
         location.hash = '#/beranda';
@@ -342,6 +345,12 @@ var App = {
     const M = this.modul();
     const bagian = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     let r = bagian[0] || this.awal();
+    if (r === 'uji-firebase') { // halaman uji migrasi Firebase (semua peran)
+      const hal = $('[data-hal]'), w = document.createElement('div');
+      w.className = u.peran === 'peserta' ? 'm-body' : 'col g28'; if (u.peran === 'peserta') w.style.paddingTop = '24px';
+      hal.innerHTML = ''; hal.appendChild(w);
+      return FBC.halamanUji(w);
+    }
     if (!M.rute[r]) r = this.awal();
     const args = bagian.slice(1).map(x => { try { return decodeURIComponent(x); } catch (e) { return x; } });
     const aktif = M.navAktif ? M.navAktif(r) : r;
