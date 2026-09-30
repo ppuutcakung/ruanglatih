@@ -148,7 +148,7 @@ function doPost(e) {
  */
 const AKSI_BACA = ['pelatihan_list', 'pelatihan_detail', 'materi_list', 'soal_list', 'tugas_list', 'nilai_rekap', 'dasbor_instruktur',
   'dasbor_admin', 'draft_list', 'umkm_list', 'umkm_riwayat', 'instruktur_list', 'eval_form', 'eval_hasil', 'pengaturan_get', 'admin_list', 'log_list', 'sert_status', 'laporan_data',
-  'p_beranda', 'p_pelatihan', 'p_ruang', 'p_materi', 'p_riwayat', 'p_sertifikat'];
+  'p_beranda', 'p_pelatihan', 'p_ruang', 'p_materi', 'p_riwayat'];
 function aksiMulti(d, sesi) {
   const calls = (d.calls || []).slice(0, 20), R = rute();
   return calls.map(c => {
@@ -232,10 +232,6 @@ function rute() {
     log_list: { peran: A, fn: aksiLogList },
 
     // --- Sertifikat & Laporan (Laporan.gs)
-    sert_status: { peran: A, fn: aksiSertStatus },
-    sert_template: { peran: A, fn: aksiSertTemplate },
-    sert_preview: { peran: A, fn: aksiSertPreview },
-    sert_terbitkan: { peran: A, fn: aksiSertTerbitkan },
     laporan_data: { peran: A, fn: aksiLaporanData },
     absensi_export: { peran: A, fn: aksiAbsensiExport },
     laporan_export: { peran: A, fn: aksiLaporanExport },
@@ -253,8 +249,7 @@ function rute() {
     p_kirim_eval: { peran: P, fn: aksiPKirimEval },
     p_materi: { peran: P, fn: aksiPMateri },
     p_riwayat: { peran: P, fn: aksiPRiwayat },
-    p_sertifikat: { peran: P, fn: aksiPSertifikat },
-    p_unduh_sertifikat: { peran: P, fn: aksiPUnduhSertifikat }
+
   };
 }
 
@@ -1972,7 +1967,7 @@ function petaNamaPengguna() {
  *  RuangLatih — File 4/5 : Peserta.gs
  *  Khusus Peserta UMKM: beranda, ruang pelatihan, absensi,
  *  pre/post-test (skor dihitung di server), tugas, evaluasi,
- *  materi sesuai sektor, riwayat, dan sertifikat.
+ *  materi sesuai sektor, dan riwayat.
  *  Pola tulis: cek hak akses di luar kunci → tulis singkat di
  *  dalam kunci, agar 50 peserta bisa mengirim di menit yang sama.
  * ============================================================
@@ -2201,7 +2196,7 @@ function aksiPMateri(d, s) {
     .sort((a, b) => String(b.tgl).localeCompare(String(a.tgl)));
 }
 
-// ---------- RIWAYAT & SERTIFIKAT ----------
+// ---------- RIWAYAT ----------
 function aksiPRiwayat(d, s) {
   return pelatihanSaya(s.id).map(p => {
     const st = statusPeserta(p, s.id, indeksPelatihan(p.id_pelatihan));
@@ -2213,21 +2208,6 @@ function aksiPRiwayat(d, s) {
       sertifikat: !!p._reg.id_file_sertifikat, nama_peserta: p._reg.nama_peserta || ''
     };
   }).sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
-}
-function aksiPSertifikat(d, s) {
-  return aksiPRiwayat(d, s).map(r => ({
-    id_pelatihan: r.id_pelatihan, judul: r.judul, tanggal: r.tanggal, instruktur: r.instruktur,
-    lulus: r.lulus, kurang: r.kurang, tersedia: r.lulus && r.sertifikat,
-    no_sertifikat: (terdaftar(r.id_pelatihan, s.id) || {}).no_sertifikat || ''
-  }));
-}
-function aksiPUnduhSertifikat(d, s) {
-  const p = cekAkses(s, d.id_pelatihan);
-  const reg = terdaftar(p.id_pelatihan, s.id);
-  const st = statusPeserta(p, s.id, indeksPelatihan(p.id_pelatihan));
-  if (!st.lulus) throw new Error('Sertifikat hanya untuk peserta yang lulus.');
-  if (!reg.id_file_sertifikat) throw new Error('Sertifikat belum diterbitkan admin.');
-  return fileKeBase64(reg.id_file_sertifikat);
 }
 
 // ============================================
@@ -2325,7 +2305,7 @@ function aksiPHapusTugas(d, s) {
  * ============================================================
  *  RuangLatih — File 5/5 : Laporan.gs
  *  Dasbor Admin, laporan & grafik, unduh Excel/PDF mengikuti
- *  template, dan sertifikat otomatis (Google Slides → PDF)
+ *  template, dan ekspor absensi PDF
  *  yang diproses bertahap agar tidak terputus batas 6 menit.
  * ============================================================
  */
@@ -2510,11 +2490,11 @@ function aksiLaporanExport(d, s) {
   const lembaga = setting('NAMA_LEMBAGA', 'Pusat Pendampingan UMKM');
   const judul = 'Rekap Pelatihan UMKM — ' + judulPel;
   const periode = f.bulan ? BULAN_ID[parseInt(f.bulan.slice(5), 10) - 1] + ' ' + f.bulan.slice(0, 4) : 'Semua periode';
-  const header = ['No', 'Nama UMKM', 'Pemilik', 'Sektor', 'No. HP', 'Pelatihan', 'Tanggal', 'Kehadiran', 'Pre-test', 'Post-test', 'Kenaikan', 'Skor Tugas', 'Tugas', 'Evaluasi', 'Status', 'No. Sertifikat'];
+  const header = ['No', 'Nama UMKM', 'Peserta', 'Sektor', 'No. HP', 'Pelatihan', 'Tanggal', 'Kehadiran', 'Pre-test', 'Post-test', 'Kenaikan', 'Skor Tugas', 'Tugas', 'Evaluasi', 'Status'];
   const data = rows.map((r, i) => [i + 1, r.nama_umkm, r.nama_pemilik, r.sektor, r.no_hp, r.pelatihan, r.tanggal,
     r.hadir + ' dari ' + r.jumlah_hari + ' hari', r.pre === null ? '-' : r.pre, r.post === null ? '-' : r.post,
     r.kenaikan === null ? '-' : r.kenaikan, r.skor_tugas === null ? '-' : r.skor_tugas, r.tugas,
-    r.evaluasi ? 'Sudah' : 'Belum', r.lulus ? 'Lulus' : 'Belum lulus', r.no_sertifikat || '-']);
+    r.evaluasi ? 'Sudah' : 'Belum', r.lulus ? 'Lulus' : 'Belum lulus']);
 
   const namaFile = 'Rekap RuangLatih ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HHmm');
   const exportsDir = folder(CONFIG.FOLDER_EXPORTS);
@@ -2677,185 +2657,6 @@ function aksiAbsensiExport(d, s) {
   if (!blob) blob = pdfDariHtml(kopHtml(judul, lembaga, info) + tabelHtml(header, data.map(r => r.map(String)), 9) + '<p style="font-size:9.5pt;font-weight:bold;margin-top:10px">Rekap kehadiran — ' + escH(rekap) + '</p>');
   catatLog(s, 'Mengunduh absensi PDF "' + p.judul + '"');
   return { nama: namaFile + '.pdf', tipe: 'application/pdf', data: Utilities.base64Encode(blob.getBytes()) };
-}
-
-// ---------- SERTIFIKAT ----------
-function idTemplate(p) { return p.id_template_sertifikat || setting('TEMPLATE_SERTIFIKAT_ID', ''); }
-function teksSlide(pres) {
-  const out = [];
-  pres.getSlides().forEach(sl => sl.getPageElements().forEach(el => {
-    try {
-      const t = el.getPageElementType();
-      if (t === SlidesApp.PageElementType.SHAPE) out.push(el.asShape().getText().asString());
-      if (t === SlidesApp.PageElementType.TABLE) {
-        const tb = el.asTable();
-        for (let r = 0; r < tb.getNumRows(); r++) for (let c = 0; c < tb.getNumColumns(); c++) out.push(tb.getCell(r, c).getText().asString());
-      }
-    } catch (e) { }
-  }));
-  return out.join('\n');
-}
-const PENANDA = ['{{nama_umkm}}', '{{nama_pemilik}}', '{{nama_peserta}}', '{{judul_pelatihan}}', '{{tanggal_pelatihan}}', '{{no_sertifikat}}'];
-
-function aksiSertStatus(d, s) {
-  const p = ambilPel(d.id_pelatihan);
-  const idx = indeksPelatihan(p.id_pelatihan);
-  const umkm = {};
-  DB.rows('UMKM').forEach(u => umkm[u.id_umkm] = u);
-  const tpl = idTemplate(p);
-  let template = null;
-  if (tpl) {
-    try { const f = DriveApp.getFileById(tpl); template = { id: tpl, nama: f.getName(), url: 'https://docs.google.com/presentation/d/' + tpl + '/edit', sumber: p.id_template_sertifikat ? 'khusus' : 'bawaan' }; }
-    catch (e) { template = { id: tpl, nama: '(tidak dapat dibuka)', url: '', sumber: p.id_template_sertifikat ? 'khusus' : 'bawaan', rusak: true }; }
-  }
-  const reg = DB.filter('Peserta_Pelatihan', x => x.id_pelatihan === p.id_pelatihan);
-  const peserta = reg.map(r => {
-    const st = statusPeserta(p, r.id_umkm, idx);
-    return { id_umkm: r.id_umkm, nama_umkm: (umkm[r.id_umkm] || {}).nama_umkm || '-', nama_pemilik: namaPeserta(r, umkm[r.id_umkm]), lulus: st.lulus, kurang: st.kurang, no_sertifikat: r.no_sertifikat, terbit: !!r.id_file_sertifikat };
-  }).sort((a, b) => (b.lulus - a.lulus) || a.nama_umkm.localeCompare(b.nama_umkm));
-  sinkronStatusLulus(p.id_pelatihan, peserta);
-  return {
-    pelatihan: ringkasPel(p), template: template,
-    template_bawaan: setting('TEMPLATE_SERTIFIKAT_ID', ''),
-    ringkas: { total: peserta.length, lulus: peserta.filter(x => x.lulus).length, terbit: peserta.filter(x => x.terbit).length },
-    peserta: peserta
-  };
-}
-function sinkronStatusLulus(idPel, peserta) {
-  const beda = peserta.filter(x => { const r = terdaftar(idPel, x.id_umkm); return r && r.status_lulus !== (x.lulus ? 'lulus' : 'belum'); });
-  if (!beda.length) return;
-  denganKunci(() => beda.forEach(x => { const r = terdaftar(idPel, x.id_umkm); if (r) DB.update('Peserta_Pelatihan', r, { status_lulus: x.lulus ? 'lulus' : 'belum' }); }));
-}
-
-function aksiSertTemplate(d, s) {
-  let id = '';
-  if (d.file && d.file.data) {
-    const f = d.file;
-    if (!/\.pptx$/i.test(f.nama || '')) throw new Error('Unggah file PowerPoint (.pptx), atau tempel link Google Slides.');
-    const bytes = Utilities.base64Decode(f.data);
-    if (bytes.length > MAX_TEMPLATE) throw new Error('Ukuran template maksimal 20 MB.');
-    const tplDir = folder(CONFIG.FOLDER_TEMPLATE);
-    const pptx = tplDir.createFile(Utilities.newBlob(bytes, 'application/vnd.openxmlformats-officedocument.presentationml.presentation', f.nama));
-    const res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + pptx.getId() + '/copy', {
-      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-      payload: JSON.stringify({ name: 'Template Sertifikat - ' + String(f.nama).replace(/\.pptx$/i, ''), mimeType: 'application/vnd.google-apps.presentation', parents: [CONFIG.FOLDER_TEMPLATE] })
-    });
-    if (res.getResponseCode() !== 200) throw new Error('Gagal mengubah PPTX menjadi Google Slides (' + res.getResponseCode() + ').');
-    id = JSON.parse(res.getContentText()).id;
-    hapusBerkas(pptx.getId());
-  } else if (d.link) {
-    id = idDariLink(d.link);
-    if (!id) throw new Error('Link Google Slides tidak valid.');
-  } else if (d.hapus_khusus) {
-    return denganKunci(() => {
-      const r = DB.find('Pelatihan', x => x.id_pelatihan === d.id_pelatihan);
-      DB.update('Pelatihan', r, { id_template_sertifikat: '' });
-      return { message: 'Pelatihan ini kembali memakai template bawaan.' };
-    });
-  } else throw new Error('Pilih file PPTX atau tempel link Google Slides.');
-
-  const pres = SlidesApp.openById(id);
-  if (pres.getSlides().length !== 1) throw new Error('Template sertifikat harus tepat 1 halaman (saat ini ' + pres.getSlides().length + ').');
-  const teks = teksSlide(pres);
-  const ada = PENANDA.filter(k => teks.indexOf(k) >= 0);
-  if (ada.indexOf('{{nama_umkm}}') < 0 && ada.indexOf('{{nama_pemilik}}') < 0)
-    throw new Error('Template belum memuat penanda {{nama_umkm}} atau {{nama_pemilik}}.');
-
-  return denganKunci(() => {
-    if (d.id_pelatihan) {
-      const r = DB.find('Pelatihan', x => x.id_pelatihan === d.id_pelatihan);
-      if (!r) throw new Error('Pelatihan tidak ditemukan.');
-      DB.update('Pelatihan', r, { id_template_sertifikat: id });
-    } else setSetting('TEMPLATE_SERTIFIKAT_ID', id);
-    catatLog(s, 'Mengatur template sertifikat ' + (d.id_pelatihan ? 'khusus ' + d.id_pelatihan : 'bawaan'));
-    return { id: id, penanda: ada, message: 'Template tersimpan. Penanda ditemukan: ' + ada.join(', ') };
-  });
-}
-
-/** {{nama_pemilik}} & {{nama_peserta}} = nama orang yang mengikuti pelatihan (perwakilan/karyawan bila diisi). */
-function dataSertifikat(p, u, noSert, reg) {
-  const nm = namaPeserta(reg, u);
-  return {
-    nama_umkm: u.nama_umkm || '', nama_pemilik: nm, nama_peserta: nm, judul_pelatihan: p.judul,
-    tanggal_pelatihan: tanggalPelatihanIndo(p), no_sertifikat: noSert || ''
-  };
-}
-function buatPdfSertifikat(tplId, data, namaFile) {
-  const copy = DriveApp.getFileById(tplId).makeCopy('tmp-' + namaFile, folder(CONFIG.FOLDER_EXPORTS));
-  try {
-    const pres = SlidesApp.openById(copy.getId());
-    Object.keys(data).forEach(k => pres.replaceAllText('{{' + k + '}}', String(data[k])));
-    pres.saveAndClose();
-    return copy.getAs('application/pdf').setName(namaFile + '.pdf');
-  } finally {
-    hapusBerkas(copy.getId());
-  }
-}
-function nomorSertifikat(p, urut) {
-  const fmt = setting('FORMAT_NO_SERTIFIKAT', '{urut}/RL-PPU/{kode}/{bulan}/{tahun}');
-  const t = String(p.tanggal_mulai).split('-');
-  return fmt.replace('{urut}', ('00' + urut).slice(-3)).replace('{kode}', p.id_pelatihan.replace(/^PL-/, ''))
-    .replace('{bulan}', ROMAWI[(parseInt(t[1], 10) || 1) - 1]).replace('{tahun}', t[0] || '');
-}
-
-function aksiSertPreview(d, s) {
-  const p = ambilPel(d.id_pelatihan);
-  const tpl = idTemplate(p);
-  if (!tpl) throw new Error('Template sertifikat belum diatur.');
-  const idx = indeksPelatihan(p.id_pelatihan);
-  const reg = DB.filter('Peserta_Pelatihan', x => x.id_pelatihan === p.id_pelatihan);
-  const pilih = reg.find(r => statusPeserta(p, r.id_umkm, idx).lulus) || reg[0];
-  const u = pilih ? (DB.find('UMKM', x => x.id_umkm === pilih.id_umkm) || {}) : { nama_umkm: 'Contoh UMKM Sejahtera', nama_pemilik: 'Nama Pemilik Contoh' };
-  const blob = buatPdfSertifikat(tpl, dataSertifikat(p, u, (pilih && pilih.no_sertifikat) || nomorSertifikat(p, 1), pilih), 'Pratinjau Sertifikat');
-  return { nama: 'Pratinjau Sertifikat.pdf', tipe: 'application/pdf', data: Utilities.base64Encode(blob.getBytes()), contoh: u.nama_umkm };
-}
-
-/**
- * Terbitkan bertahap: tiap panggilan memproses sebanyak mungkin
- * dalam ±4 menit, lalu mengembalikan sisa. Frontend memanggil ulang
- * otomatis sampai sisa = 0. Aman dilanjutkan bila sempat terhenti.
- */
-function aksiSertTerbitkan(d, s) {
-  const mulai = Date.now();
-  const p = ambilPel(d.id_pelatihan);
-  const tpl = idTemplate(p);
-  if (!tpl) throw new Error('Template sertifikat belum diatur.');
-  const idx = indeksPelatihan(p.id_pelatihan);
-  const umkm = {};
-  DB.rows('UMKM').forEach(u => umkm[u.id_umkm] = u);
-
-  if (d.ulang) {
-    denganKunci(() => DB.filter('Peserta_Pelatihan', x => x.id_pelatihan === p.id_pelatihan && x.id_file_sertifikat).forEach(r => {
-      hapusBerkas(r.id_file_sertifikat);
-      DB.update('Peserta_Pelatihan', r, { id_file_sertifikat: '' });
-    }));
-  }
-  const reg = DB.filter('Peserta_Pelatihan', x => x.id_pelatihan === p.id_pelatihan);
-  const lulus = reg.filter(r => statusPeserta(p, r.id_umkm, idx).lulus)
-    .sort((a, b) => String((umkm[a.id_umkm] || {}).nama_umkm).localeCompare(String((umkm[b.id_umkm] || {}).nama_umkm)));
-  if (!lulus.length) throw new Error('Belum ada peserta yang memenuhi syarat lulus.');
-  const dir = subFolder(CONFIG.FOLDER_SERTIFIKAT, p.id_pelatihan);
-  let maxUrut = 0;
-  reg.forEach(r => { const m = String(r.no_sertifikat || '').match(/^(\d+)/); if (m) maxUrut = Math.max(maxUrut, parseInt(m[1], 10)); });
-
-  let dibuat = 0;
-  const antre = lulus.filter(r => !r.id_file_sertifikat);
-  for (let i = 0; i < antre.length; i++) {
-    if (Date.now() - mulai > 240000) break;
-    const r = antre[i], u = umkm[r.id_umkm] || {};
-    const no = r.no_sertifikat || nomorSertifikat(p, ++maxUrut);
-    const blob = buatPdfSertifikat(tpl, dataSertifikat(p, u, no, r), 'Sertifikat - ' + (u.nama_umkm || r.id_umkm) + ' - ' + p.judul);
-    const f = dir.createFile(blob);
-    denganKunci(() => {
-      const row = terdaftar(p.id_pelatihan, r.id_umkm);
-      if (row) DB.update('Peserta_Pelatihan', row, { no_sertifikat: no, id_file_sertifikat: f.getId(), status_lulus: 'lulus' });
-    });
-    dibuat++;
-  }
-  const sisa = antre.length - dibuat;
-  if (!sisa) catatLog(s, 'Menerbitkan sertifikat "' + p.judul + '" (' + lulus.length + ' peserta)');
-  return { dibuat: dibuat, sisa: sisa, total: lulus.length, message: sisa ? dibuat + ' sertifikat dibuat, melanjutkan ' + sisa + ' lagi...' : 'Semua ' + lulus.length + ' sertifikat sudah terbit.' };
 }
 
 // ==================== Cermin.gs ====================

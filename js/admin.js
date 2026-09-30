@@ -2,7 +2,7 @@
    RuangLatih — admin.js
    Portal Super Admin: dasbor monitoring, pelatihan (+ peserta,
    aktivitas, syarat, flyer), instruktur, bank materi, data UMKM,
-   absensi, tugas, pre/post-test, evaluasi, sertifikat, laporan,
+   absensi, tugas, pre/post-test, evaluasi, laporan,
    log, manajemen akses, pengaturan, pencarian.
    ============================================================= */
 const AKTIVITAS = [
@@ -18,7 +18,7 @@ const SYARAT = [['hadir', 'Hadir penuh sesuai jumlah hari'], ['post', 'Sudah men
 const Admin = {
   nav: [['dasbor', 'dashboard', 'Dashboard'], ['pelatihan', 'cap', 'Pelatihan'], ['instruktur', 'user', 'Instruktur'], ['materi', 'book', 'Bank Materi'],
     ['peserta', 'users', 'Peserta'], ['absensi', 'checkSquare', 'Absensi'], ['tugas', 'clipboard', 'Tugas Peserta'], ['tes', 'fileQ', 'Pre-Pos Test'],
-    ['evaluasi', 'edit', 'Evaluasi Pelatihan'], ['sertifikat', 'award', 'Sertifikat'], ['laporan', 'chart', 'Laporan Rekap'], ['log', 'history', 'Log Aktivitas'],
+    ['evaluasi', 'edit', 'Evaluasi Pelatihan'], ['laporan', 'chart', 'Laporan Rekap'], ['log', 'history', 'Log Aktivitas'],
     ['akses', 'lock', 'Manajemen Akses'], ['pengaturan', 'settings', 'Pengaturan']],
   subjudul: 'by PPU UT Cakung',
 
@@ -32,7 +32,6 @@ const Admin = {
     tugas: el => Kelola.halamanTugas(el, { judul: 'Tugas Peserta', atas: (h, id) => Admin.panelAktivitas(h, id, ['tugas']) }),
     tes: el => Kelola.halamanSoal(el, { judul: 'Pre-Pos Test', rekap: true, atas: (h, id) => Admin.panelAktivitas(h, id, ['pre', 'post']) }),
     evaluasi: el => Admin.evaluasi(el),
-    sertifikat: el => Admin.sertifikat(el),
     laporan: el => Admin.laporan(el),
     log: el => Admin.log(el),
     akses: (el, a) => Admin.akses(el, a[0]),
@@ -350,7 +349,7 @@ const Admin = {
           p.tanggal_hari.map((t, i) => '<td class="center">' + (x.absen[i + 1] ? '<span class="c-ok" title="' + esc(x.absen[i + 1]) + '">' + UI.ic('checkCircle', 'sm') + '</span>' : '<span class="faint">–</span>') + '</td>').join('') +
           '<td class="num">' + UI.angka(x.pre) + '</td><td class="num">' + UI.angka(x.post) + '</td><td class="num">' + x.tugas_kumpul + '/' + x.tugas_total + (x.skor_tugas !== null ? ' <span class="t-xs muted">(' + UI.angka(x.skor_tugas) + ')</span>' : '') + '</td>' +
           '<td class="center">' + (x.evaluasi ? '<span class="c-ok">' + UI.ic('check', 'sm') + '</span>' : '<span class="faint">–</span>') + '</td>' +
-          '<td><span title="' + esc(x.kurang.join(' · ')) + '">' + UI.chipLulus(x.lulus) + '</span>' + (x.sertifikat_terbit ? ' <span class="chip info sm">' + UI.ic('award', 'sm') + '</span>' : '') + '</td>' +
+          '<td><span title="' + esc(x.kurang.join(' · ')) + '">' + UI.chipLulus(x.lulus) + '</span>' + '</td>' +
           '<td><button class="btn icon sm ghost" data-aksi="keluar" data-id="' + esc(x.id_umkm) + '" data-n="' + esc(x.nama_umkm) + '" title="Keluarkan">' + UI.ic('x', 'sm') + '</button></td></tr>').join('') +
         '</tbody></table></div><div class="hint mt8">Arahkan kursor ke status untuk melihat syarat yang belum terpenuhi.</div>'
         : UI.kosong('Belum ada peserta. Daftarkan UMKM binaan (pemilik atau karyawannya) ke pelatihan ini.', 'users')) + '</div>';
@@ -717,8 +716,8 @@ const Admin = {
         '<div class="card well tight center"><div class="t-xs muted">Lulus</div><div class="h-lg c-ok">' + lulus + '</div></div><div class="card well tight center"><div class="t-xs muted">Kehadiran</div><div class="h-lg">' + (hari ? Math.round(hadir / hari * 100) : 0) + '%</div></div></div>' +
         '<div class="list">' + rows.map(r => '<a class="item" href="#/pelatihan/' + esc(r.id_pelatihan) + '" data-tutup style="color:inherit;align-items:flex-start;flex-wrap:wrap"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow" style="min-width:200px"><div class="row g8 wrap"><span class="semi">' + esc(r.judul) + '</span>' + UI.chipStatus(r.status) + '</div>' +
           '<div class="meta"><span>' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</span><span>' + esc(r.instruktur) + '</span>' + (r.nama_peserta ? '<span>Peserta: ' + esc(r.nama_peserta) + ' (perwakilan)</span>' : '') + '</div>' +
-          '<div class="meta mt8"><span>Hadir ' + r.hadir + '/' + r.jumlah_hari + '</span><span>Pre ' + UI.angka(r.pre) + ' → Post ' + UI.angka(r.post) + (r.kenaikan !== null ? ' (' + (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan) + ')' : '') + '</span><span>Tugas ' + r.tugas_kumpul + '/' + r.tugas_total + '</span>' + (r.no_sertifikat ? '<span>No. ' + esc(r.no_sertifikat) + '</span>' : '') + '</div></div>' +
-          '<div class="col g4" style="align-items:flex-end">' + UI.chipLulus(r.lulus) + (r.sertifikat ? '<span class="chip info sm">' + UI.ic('award', 'sm') + 'Sertifikat</span>' : '') + '</div></a>').join('') + '</div>'
+          '<div class="meta mt8"><span>Hadir ' + r.hadir + '/' + r.jumlah_hari + '</span><span>Pre ' + UI.angka(r.pre) + ' → Post ' + UI.angka(r.post) + (r.kenaikan !== null ? ' (' + (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan) + ')' : '') + '</span><span>Tugas ' + r.tugas_kumpul + '/' + r.tugas_total + '</span>' + '</div></div>' +
+          '<div class="col g4" style="align-items:flex-end">' + UI.chipLulus(r.lulus) + '</div></a>').join('') + '</div>'
         : UI.kosong('Belum pernah mengikuti pelatihan. Daftarkan dari halaman detail pelatihan.', 'cap');
     }, { el: box }).catch(e => UI.galat(box, e));
   },
@@ -940,89 +939,6 @@ const Admin = {
   },
 
   // ===========================================================
-  // SERTIFIKAT
-  // ===========================================================
-  async sertifikat(el) {
-    el.innerHTML = Kelola.kepala('Sertifikat', 'Template Slides/PPTX → PDF otomatis untuk peserta lulus', '<span data-picker></span>') + '<div data-isi></div>';
-    const isi = $('[data-isi]', el);
-    let idPel = '', d = null;
-    const muat = async () => {
-      if (!idPel) { isi.innerHTML = Kelola.tanpaPelatihan(); return; }
-      UI.loading(isi, 3);
-      const idA = idPel;
-      // ⚡ Mode Firebase: status peserta langsung dari data lokal (instan); info template (Google Drive) menyusul dari server
-      if (API.modeFB() && !Simpan.get(Simpan.kunci('sert_status', { id_pelatihan: idA }))) {
-        try {
-          const det = await API.call('pelatihan_detail', { id_pelatihan: idA });
-          if (idA === idPel && !d) {
-            const ps = det.peserta.map(x => ({ id_umkm: x.id_umkm, nama_umkm: x.nama_umkm, nama_pemilik: x.nama_pemilik, lulus: x.lulus, kurang: x.kurang || [], no_sertifikat: x.no_sertifikat, terbit: !!x.sertifikat_terbit }));
-            d = { template: undefined, ringkas: { total: ps.length, lulus: ps.filter(x => x.lulus).length, terbit: ps.filter(x => x.terbit).length }, peserta: ps };
-            gambar();
-          }
-        } catch (e) { }
-      }
-      try { await API.ambil('sert_status', { id_pelatihan: idA }, x => { if (idA === idPel && !isi._terbit) { d = x; gambar(); } }, { el: isi }); } catch (e) { if (!d) UI.galat(isi, e, muat); else UI.gagal(e); }
-    };
-    const gambar = () => {
-      const t = d.template, r = d.ringkas;
-      isi.innerHTML = '<div class="grid g3"><div class="card stat"><span class="l">Peserta</span><span class="v">' + r.total + '</span></div><div class="card stat"><span class="l">Memenuhi syarat lulus</span><span class="v c-ok">' + r.lulus + '</span></div><div class="card stat"><span class="l">Sertifikat terbit</span><span class="v c-primary">' + r.terbit + ' <span class="t-sm muted">/ ' + r.lulus + '</span></span></div></div>' +
-        '<div class="grid g2 mt20" style="align-items:start"><div class="card"><div class="card-h"><div class="h-sm">Template Sertifikat</div>' + (t ? '<span class="chip ' + (t.sumber === 'khusus' ? 'solid' : 'info') + ' sm">' + (t.sumber === 'khusus' ? 'Khusus pelatihan ini' : 'Template bawaan') + '</span>' : '') + '</div>' +
-        (t === undefined ? '<div class="card well tight t-sm row">' + '<span class="spin" style="width:14px;height:14px"></span> Memuat info template dari Google Drive…</div>' : t ? '<div class="item"><div class="ic-tile">' + UI.ic('award') + '</div><div class="grow"><div class="semi clamp1">' + esc(t.nama) + '</div><div class="t-xs muted">Google Slides · 1 halaman</div></div>' + (t.url ? '<a class="btn sm outline" href="' + esc(t.url) + '" target="_blank" rel="noopener">Buka</a>' : '') + '</div>' + (t.rusak ? '<div class="err mt8">Template tidak dapat dibuka. Unggah ulang.</div>' : '')
-          : '<div class="card well tight t-sm">Belum ada template. Unggah PPTX atau tempel link Google Slides (1 halaman).</div>') +
-        '<div class="t-xs muted mt12">Penanda yang diganti otomatis: {{nama_umkm}} {{nama_pemilik}} {{judul_pelatihan}} {{tanggal_pelatihan}} {{no_sertifikat}}</div>' +
-        '<div class="row wrap g8 mt12"><button class="btn secondary sm" data-aksi="pptx" data-khusus="1">' + UI.ic('upload', 'sm') + 'Unggah PPTX (khusus)</button><button class="btn outline sm" data-aksi="link" data-khusus="1">' + UI.ic('link', 'sm') + 'Link Slides (khusus)</button>' +
-        (t && t.sumber === 'khusus' ? '<button class="btn ghost sm" data-aksi="hapusKhusus">Pakai template bawaan</button>' : '') + '</div>' +
-        '<div class="row wrap g8 mt8"><button class="btn outline sm" data-aksi="pptx">' + UI.ic('upload', 'sm') + 'Ganti template bawaan (PPTX)</button><button class="btn outline sm" data-aksi="link">' + UI.ic('link', 'sm') + 'Link bawaan</button></div></div>' +
-        '<div class="card"><div class="h-sm">Terbitkan</div><div class="t-sm muted mt8">Sertifikat PDF dibuat untuk peserta yang memenuhi syarat lulus dan disimpan di folder Drive Sertifikat/' + esc(idPel) + '. Proses berjalan bertahap otomatis.</div>' +
-        '<div class="bar mt20" data-pbar hidden><i style="width:0"></i></div><div class="t-sm semi mt8" data-pteks></div>' +
-        '<div class="row wrap g8 mt12"><button class="btn outline sm" data-aksi="pratinjau"' + (t ? '' : ' disabled') + '>' + UI.ic('eye', 'sm') + 'Pratinjau</button>' +
-        '<button class="btn primary sm" data-aksi="terbit"' + (t && r.lulus ? '' : ' disabled') + '>' + UI.ic('award', 'sm') + 'Terbitkan (' + (r.lulus - r.terbit) + ' baru)</button>' +
-        (r.terbit ? '<button class="btn danger sm" data-aksi="ulang">' + UI.ic('refresh', 'sm') + 'Terbitkan ulang semua</button>' : '') + '</div></div></div>' +
-        '<div class="card mt20"><div class="card-h"><div class="h-sm">Status Peserta</div></div>' + (d.peserta.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Kelulusan</th><th>No. Sertifikat</th><th>Status</th></tr></thead><tbody>' +
-          d.peserta.map(x => '<tr><td><div class="semi">' + esc(x.nama_umkm) + '</div><div class="t-xs muted">' + esc(x.nama_pemilik) + '</div></td><td>' + UI.chipLulus(x.lulus) + (x.kurang.length ? '<div class="t-xs muted mt8">' + x.kurang.map(esc).join(' · ') + '</div>' : '') + '</td>' +
-            '<td class="num">' + esc(x.no_sertifikat || '–') + '</td><td>' + (x.terbit ? '<span class="chip ok sm">' + UI.ic('check', 'sm') + 'Terbit</span>' : (x.lulus ? '<span class="chip warn sm">Menunggu</span>' : '<span class="faint">–</span>')) + '</td></tr>').join('') + '</tbody></table></div>' : UI.kosong('Belum ada peserta.', 'users')) + '</div>';
-    };
-    const terbitkan = async (b, ulang) => {
-      const bar = $('[data-pbar]', isi), teks = $('[data-pteks]', isi);
-      isi._terbit = true;
-      bar.hidden = false;
-      $$('button', isi).forEach(x => x.disabled = true);
-      try {
-        let r, pertama = true;
-        do {
-          teks.textContent = 'Memproses sertifikat… jangan tutup halaman ini.';
-          r = await API.call('sert_terbitkan', { id_pelatihan: idPel, ulang: ulang && pertama }, { retry: 3 });
-          pertama = false;
-          $('i', bar).style.width = Math.round((r.total - r.sisa) / r.total * 100) + '%';
-          teks.textContent = r.message;
-        } while (r.sisa > 0);
-        UI.toast(r.message);
-      } catch (e) { UI.gagal(e); teks.textContent = e.message + ' — klik Terbitkan lagi untuk melanjutkan.'; }
-      isi._terbit = false;
-      muat();
-    };
-    UI.klik(isi, {
-      pptx: async b => {
-        const f = (await UI.pilihFile('.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation', false))[0];
-        if (!f) return;
-        if (!/\.pptx$/i.test(f.name)) return UI.toast('Pilih file PowerPoint (.pptx).', 'bad');
-        if (f.size > 20 * 1048576) return UI.toast('Ukuran template maksimal 20 MB.', 'bad');
-        try { await UI.sibuk(b, async () => { const o = await UI.fileKeObj(f); const r = await API.call('sert_template', { id_pelatihan: b.dataset.khusus ? idPel : '', file: { nama: o.nama, data: o.data } }); UI.toast(r.message); }, 'Mengonversi…'); muat(); } catch (e) { UI.gagal(e); }
-      },
-      link: b => UI.form({
-        title: b.dataset.khusus ? 'Template khusus pelatihan ini' : 'Template bawaan', submit: 'Simpan',
-        fields: [{ name: 'link', label: 'Link Google Slides', full: true, placeholder: 'https://docs.google.com/presentation/d/…', hint: 'Pastikan akun pemilik Apps Script bisa membuka file ini. Template harus 1 halaman.' }],
-        onSubmit: async v => { const r = await API.call('sert_template', { id_pelatihan: b.dataset.khusus ? idPel : '', link: v.link }); UI.toast(r.message); muat(); }
-      }),
-      hapusKhusus: async () => { try { const r = await API.call('sert_template', { id_pelatihan: idPel, hapus_khusus: true }); UI.toast(r.message); muat(); } catch (e) { UI.gagal(e); } },
-      pratinjau: async b => { try { await UI.sibuk(b, async () => { const f = await API.call('sert_preview', { id_pelatihan: idPel }); UI.lihatBerkas(f, 'Pratinjau · ' + (f.contoh || '')); }, 'Membuat…'); } catch (e) { UI.gagal(e); } },
-      terbit: b => terbitkan(b, false),
-      ulang: async b => { if (await UI.konfirmasi('Hapus semua PDF sertifikat pelatihan ini lalu buat ulang? Nomor sertifikat tetap sama.', { ok: 'Terbitkan ulang', bahaya: true })) terbitkan(b, true); }
-    });
-    try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; d = null; muat(); }); } catch (e) { UI.galat(isi, e, () => this.sertifikat(el)); }
-  },
-
-  // ===========================================================
   // LAPORAN REKAP
   // ===========================================================
   async laporan(el) {
@@ -1067,10 +983,10 @@ const Admin = {
         (ev.length ? '<div class="card"><div class="h-sm" style="margin-bottom:12px">Skor Evaluasi per Pelatihan (skala 1–4)</div><div style="overflow-x:auto"><div style="min-width:' + Math.max(560, ev.length * 110) + 'px">' +
           UI.grafikBatang({ w: Math.max(640, ev.length * 120), labels: ev.map(e => e.judul), maks: 4, series: [{ nama: 'A. Materi', warna: UI.warna('blush-4'), nilai: ev.map(e => e.A) }, { nama: 'B. Instruktur', warna: UI.warna('primary'), nilai: ev.map(e => e.B) }, { nama: 'C. Penyelenggaraan', warna: UI.warna('primary-press'), nilai: ev.map(e => e.C) }] }) + '</div></div></div>' : '') +
         '<div class="card"><div class="card-h"><div class="h-sm">Tabel Rekap</div><span class="chip sm">' + rows.length + ' baris</span></div>' +
-        (rows.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>Pelatihan</th><th class="num">Hadir</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Naik</th><th class="num">Tugas</th><th>Eval</th><th>Status</th><th>No. Sertifikat</th></tr></thead><tbody>' +
+        (rows.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>UMKM</th><th>Sektor</th><th>Pelatihan</th><th class="num">Hadir</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Naik</th><th class="num">Tugas</th><th>Eval</th><th>Status</th></tr></thead><tbody>' +
           rows.slice((hal - 1) * per, hal * per).map(r => '<tr><td><div class="semi">' + esc(r.nama_umkm) + '</div><div class="t-xs muted">' + esc(r.nama_pemilik) + '</div></td><td>' + esc(r.sektor) + '</td><td><div class="clamp1" style="max-width:220px">' + esc(r.pelatihan) + '</div><div class="t-xs muted">' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</div></td>' +
             '<td class="num">' + r.hadir + '/' + r.jumlah_hari + '</td><td class="num">' + UI.angka(r.pre) + '</td><td class="num">' + UI.angka(r.post) + '</td><td class="num">' + (r.kenaikan === null ? '–' : (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan)) + '</td><td class="num">' + esc(r.tugas) + '</td>' +
-            '<td>' + (r.evaluasi ? UI.ic('check', 'sm') : '–') + '</td><td>' + UI.chipLulus(r.lulus) + '</td><td class="t-xs">' + esc(r.no_sertifikat || '–') + '</td></tr>').join('') + '</tbody></table></div>' + UI.halaman(rows.length, hal, per)
+            '<td>' + (r.evaluasi ? UI.ic('check', 'sm') : '–') + '</td><td>' + UI.chipLulus(r.lulus) + '</td></tr>').join('') + '</tbody></table></div>' + UI.halaman(rows.length, hal, per)
           : UI.kosong('Tidak ada data untuk filter ini.', 'chart')) + '</div>';
     };
     $$('[data-k]', isi).forEach(x => x.addEventListener(x.tagName === 'INPUT' ? 'input' : 'change', () => { f[x.dataset.k] = x.value.trim(); hal = 1; gambar(); }));
@@ -1272,7 +1188,7 @@ const Admin = {
   // PENGATURAN
   // ===========================================================
   async pengaturan(el) {
-    el.innerHTML = Kelola.kepala('Pengaturan', 'Identitas aplikasi, laporan & sertifikat, dan sistem') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Pengaturan', 'Identitas aplikasi, laporan, dan sistem') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     UI.loading(isi, 2);
     let s, lokal = false;
@@ -1306,14 +1222,13 @@ const Admin = {
       '<div class="row between wrap"><button class="btn ghost sm" data-aksi="bawaan">' + UI.ic('refresh', 'sm') + 'Kembalikan bawaan</button><button class="btn primary" data-aksi="simpanIdentitas">' + UI.ic('check', 'sm') + 'Simpan Identitas</button></div></div>' +
       '<div class="card"><div class="h-md">Pratinjau</div><div class="t-sm muted" style="margin-bottom:14px">Halaman masuk di layar HP</div><div class="hp-mock" data-mock><div class="hp-in" data-mockisi></div></div></div></div>' +
 
-      '<div class="grid g2 mt20" style="align-items:start"><div class="card col g20"><div class="h-sm">Laporan & Sertifikat</div>' +
+      '<div class="grid g2 mt20" style="align-items:start"><div class="card col g20"><div class="h-sm">Laporan</div>' +
       '<div class="field"><label>Nama lembaga (kop laporan)</label><input class="input" name="NAMA_LEMBAGA" value="' + esc(s.NAMA_LEMBAGA) + '"></div>' +
-      '<div class="field"><label>Format nomor sertifikat</label><input class="input" name="FORMAT_NO_SERTIFIKAT" value="' + esc(s.FORMAT_NO_SERTIFIKAT || '{urut}/RL-PPU/{kode}/{bulan}/{tahun}') + '"><div class="hint">Penanda: {urut} (wajib, 001…), {kode} (kode pelatihan), {bulan} (romawi), {tahun}</div></div>' +
-      '<div class="field"><label>Template laporan (link Google Sheets, opsional)</label><input class="input" name="TEMPLATE_LAPORAN_ID" value="' + esc(s.TEMPLATE_LAPORAN_ID ? 'https://docs.google.com/spreadsheets/d/' + s.TEMPLATE_LAPORAN_ID : '') + '" placeholder="Kosongkan untuk format standar"><div class="hint">Tulis {{tabel}} di sel awal tabel. Penanda lain: {{nama_lembaga}} {{judul_laporan}} {{periode}} {{judul_pelatihan}} {{sektor}} {{tanggal_cetak}} {{jumlah_peserta}} {{jumlah_lulus}}</div></div>' +
+            '<div class="field"><label>Template laporan (link Google Sheets, opsional)</label><input class="input" name="TEMPLATE_LAPORAN_ID" value="' + esc(s.TEMPLATE_LAPORAN_ID ? 'https://docs.google.com/spreadsheets/d/' + s.TEMPLATE_LAPORAN_ID : '') + '" placeholder="Kosongkan untuk format standar"><div class="hint">Tulis {{tabel}} di sel awal tabel. Penanda lain: {{nama_lembaga}} {{judul_laporan}} {{periode}} {{judul_pelatihan}} {{sektor}} {{tanggal_cetak}} {{jumlah_peserta}} {{jumlah_lulus}}</div></div>' +
       '<div><div class="lbl" style="margin-bottom:6px">Syarat lulus bawaan (untuk pelatihan baru)</div>' + SYARAT.map(x => '<label class="check"><input type="checkbox" name="sy_' + x[0] + '"' + (sy[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div>' +
       '<div><button class="btn primary" data-aksi="simpan">Simpan Pengaturan</button></div></div>' +
       '<div class="col g20"><div class="card"><div class="h-sm">Penyimpanan Google</div><div class="list mt12">' +
-      [['Folder utama Drive', s.folder, 'layers'], ['Folder template sertifikat', s.folder_template, 'award'], ['Spreadsheet database', s.spreadsheet, 'chart']].filter(x => x[1]).map(x => '<a class="item" href="' + esc(x[1]) + '" target="_blank" rel="noopener"><div class="ic-tile sm">' + UI.ic(x[2], 'sm') + '</div><div class="grow semi">' + x[0] + '</div>' + UI.ic('chevR', 'sm') + '</a>').join('') + '</div></div>' +
+      [['Folder utama Drive', s.folder, 'layers'], ['Spreadsheet database', s.spreadsheet, 'chart']].filter(x => x[1]).map(x => '<a class="item" href="' + esc(x[1]) + '" target="_blank" rel="noopener"><div class="ic-tile sm">' + UI.ic(x[2], 'sm') + '</div><div class="grow semi">' + x[0] + '</div>' + UI.ic('chevR', 'sm') + '</a>').join('') + '</div></div>' +
       '<div class="card"><div class="h-sm">Database</div><div class="mt8">' + (s.sumber_data === undefined ? '<span class="chip line sm">Memuat…</span>' : s.sumber_data === 'firebase' ? '<span class="chip ok dot sm">Firebase (Firestore)</span><div class="t-sm muted mt8">Spreadsheet = cadangan otomatis tiap malam' + (s.cadangan_terakhir ? ' · terakhir ' + esc(UI.waktu(s.cadangan_terakhir)) : '') + '.</div>' : '<span class="chip line sm">Spreadsheet</span>') + '</div>' +
       '<div class="t-sm muted mt8">' + (FBC.aktif() ? 'Konfigurasi Firebase terpasang.' : 'FIREBASE_CONFIG belum diisi di js/config.js.') + '</div>' +
       (FBC.aktif() ? '<a class="btn secondary sm mt12" href="#/uji-firebase">' + UI.ic('shield', 'sm') + 'Buka Uji Firebase</a>' : '') + '</div>' +
@@ -1393,7 +1308,7 @@ const Admin = {
       },
       simpan: async b => {
         const v = n => $('[name="' + n + '"]', isi);
-        const data = { NAMA_LEMBAGA: v('NAMA_LEMBAGA').value, FORMAT_NO_SERTIFIKAT: v('FORMAT_NO_SERTIFIKAT').value, TEMPLATE_LAPORAN_ID: v('TEMPLATE_LAPORAN_ID').value.trim(), SYARAT_LULUS_DEFAULT: {} };
+        const data = { NAMA_LEMBAGA: v('NAMA_LEMBAGA').value, TEMPLATE_LAPORAN_ID: v('TEMPLATE_LAPORAN_ID').value.trim(), SYARAT_LULUS_DEFAULT: {} };
         SYARAT.forEach(x => data.SYARAT_LULUS_DEFAULT[x[0]] = v('sy_' + x[0]).checked);
         try { await UI.sibuk(b, async () => { const r = await API.call('pengaturan_simpan', data); UI.toast(r.message); }); } catch (e) { UI.gagal(e); }
       }

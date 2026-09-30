@@ -8,13 +8,13 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '3.5', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '3.6', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
   BACA: ['pelatihan_list', 'pelatihan_detail', 'materi_list', 'soal_list', 'tugas_list', 'nilai_rekap', 'dasbor_instruktur', 'dasbor_admin',
     'draft_list', 'umkm_list', 'umkm_riwayat', 'instruktur_list', 'eval_form', 'eval_hasil', 'log_list', 'laporan_data',
-    'p_beranda', 'p_pelatihan', 'p_ruang', 'p_soal', 'p_eval_form', 'p_materi', 'p_riwayat', 'p_sertifikat', 'multi'],
+    'p_beranda', 'p_pelatihan', 'p_ruang', 'p_soal', 'p_eval_form', 'p_materi', 'p_riwayat', 'multi'],
   // tugas_nilai sengaja lewat server (GAS): nilai adalah data penting → tidak bergantung aturan di browser
   // pelatihan_hapus & tugas_hapus lewat server: berkas Google Drive (flyer, lampiran) ikut dihapus
   TULIS: ['pelatihan_simpan', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',

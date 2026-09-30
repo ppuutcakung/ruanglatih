@@ -13,7 +13,7 @@ Urutan wajib: **Backend dulu → salin URL `/exec` → isi `js/config.js` → ba
 
 ## BAGIAN A — Backend (Google Apps Script)
 
-> Gunakan **akun Google milik PPU** (bukan akun pribadi), karena semua data, materi, dan sertifikat akan tersimpan di Google Drive akun ini.
+> Gunakan **akun Google milik PPU** (bukan akun pribadi), karena semua data, materi, dan berkas tugas akan tersimpan di Google Drive akun ini.
 
 ### A1. Buat proyek
 1. Buka **https://script.google.com** → **Proyek baru**.
@@ -36,7 +36,7 @@ Urutan wajib: **Backend dulu → salin URL `/exec` → isi `js/config.js` → ba
    - `✅ Folder root: …`
    - `✅ 16 sheet dibuat.`
    - `✅ Setup selesai!`
-4. Cek Google Drive: ada folder **📁 RuangLatih** berisi `Materi`, `Flyer`, `Tugas`, `Sertifikat`, `Template`, `Exports`, dan spreadsheet **Database — RuangLatih**.
+4. Cek Google Drive: ada folder **📁 RuangLatih** berisi `Materi`, `Flyer`, `Tugas`, `Sertifikat` (tidak dipakai lagi), `Template`, `Exports`, dan spreadsheet **Database — RuangLatih**.
 
 5. **Pembersihan log otomatis:** pilih fungsi **`pasangJadwalLog`** → ▶ Jalankan (sekali saja). Log aktivitas akan dihapus otomatis setiap **hari terakhir bulan** (±23.00 WIB) agar penyimpanan hemat. Statusnya terlihat di menu **Pengaturan**. Untuk menghentikan: jalankan `hentikanJadwalLog`.
 
@@ -175,31 +175,20 @@ Bila masih tampil versi lama: **Ctrl+Shift+R** atau buka mode Incognito.
 
 ## BAGIAN D — Langkah pertama memakai aplikasi (Admin)
 
-1. **Pengaturan** → **Identitas Aplikasi** (nama, tagline, logo, teks footer, warna utama, nomor WA admin) lalu cek nama lembaga dan format nomor sertifikat. Nomor WA di sini menggantikan `waAdmin` di `config.js`.
+1. **Pengaturan** → **Identitas Aplikasi** (nama, tagline, logo, teks footer, warna utama, nomor WA admin) lalu cek nama lembaga (kop laporan). Nomor WA di sini menggantikan `waAdmin` di `config.js`.
 2. **Instruktur** → Tambah Instruktur → bagikan **nama + kode akses** kepada instruktur.
 3. **Peserta** → Tambah UMKM satu per satu, atau **Impor** (salin kolom dari Excel/Google Form: nama_umkm, nama_pemilik, sektor, spesialisasi, no_hp, alamat, pin, gender). **Nama UMKM harus unik** karena dipakai peserta untuk masuk (Nama UMKM + PIN 4 angka).
 4. **Manajemen Akses** → kirim info akses (Nama UMKM + PIN) ke peserta lewat tombol WhatsApp; kirim kode akses ke instruktur.
 5. **Pelatihan** → Buat Pelatihan (pilih **1 Hari** atau **2 Hari**; bisa **Simpan Draft** dulu) → form **Daftarkan UMKM** terbuka otomatis (bisa langsung **Tambah UMKM Baru**).
 6. Instruktur mengunggah **materi PDF**, menyusun **soal pre/post-test**, dan membuat **tugas**.
 7. Hari-H: tab **Absensi** → **QR Absensi** → tampilkan layar penuh / cetak. Peserta scan QR, pilih hari, isi Nama UMKM & Nama Peserta — tercatat otomatis. Nyalakan **Pre-test**, lalu setelah materi **Post-test**, **Tugas**, dan **Evaluasi**. Pantau di **Pre-Pos Test → Rekap Nilai Peserta**.
-8. **Sertifikat** → unggah template (lihat bagian E) → **Pratinjau** → **Terbitkan**.
-9. **Laporan Rekap** → saring pelatihan/sektor/bulan → unduh **Excel** atau **PDF**. **Absensi** → **Ekspor PDF** untuk daftar hadir per pelatihan.
+8. **Laporan Rekap** → saring pelatihan/sektor/bulan → unduh **Excel** atau **PDF**. **Absensi** → **Ekspor PDF** untuk daftar hadir per pelatihan.
 
 ---
 
-## BAGIAN E — Template sertifikat & laporan
+## BAGIAN E — Template laporan
 
-**Sertifikat** — buat di PowerPoint atau Google Slides, **tepat 1 halaman**, lalu tulis penanda persis seperti ini di kotak teks:
-
-| Penanda | Diganti dengan |
-|---|---|
-| `{{nama_umkm}}` | Nama UMKM |
-| `{{nama_pemilik}}` | Nama pemilik |
-| `{{judul_pelatihan}}` | Judul pelatihan |
-| `{{tanggal_pelatihan}}` | mis. 24–25 September 2026 |
-| `{{no_sertifikat}}` | mis. 001/RL-PPU/001/IX/2026 |
-
-Unggah sebagai **template bawaan** (berlaku untuk semua pelatihan) atau **khusus** satu pelatihan. File PPTX dikonversi otomatis menjadi Google Slides di folder `Template`.
+> Sertifikat diberikan **secara fisik** kepada peserta — fitur sertifikat digital tidak lagi tersedia di aplikasi.
 
 **Laporan (opsional)** — buat Google Sheets dengan kop/logo sesuai format PPU. Tulis `{{tabel}}` di sel tempat tabel mulai. Penanda lain yang boleh dipakai: `{{nama_lembaga}}` `{{judul_laporan}}` `{{periode}}` `{{judul_pelatihan}}` `{{sektor}}` `{{tanggal_cetak}}` `{{jumlah_peserta}}` `{{jumlah_lulus}}`. Tempel link-nya di **Pengaturan → Template laporan**. Tanpa template, laporan memakai format standar.
 

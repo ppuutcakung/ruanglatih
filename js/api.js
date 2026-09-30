@@ -24,21 +24,21 @@ const BACA = {
   pelatihan_list: 'pel reg', pelatihan_detail: 'pel reg absen tes tugas eval umkm sert', materi_list: 'materi', soal_list: 'soal tes',
   tugas_list: 'tugas umkm', nilai_rekap: 'pel reg absen tes tugas umkm', dasbor_instruktur: 'pel reg absen tes tugas soal materi',
   dasbor_admin: '*', draft_list: 'draft', umkm_list: 'umkm reg', umkm_riwayat: '*', instruktur_list: 'ins pel', eval_form: 'eval', eval_hasil: 'eval reg pel', pengaturan_get: 'set',
-  admin_list: 'admin', log_list: '*', sert_status: 'sert reg absen tes tugas pel umkm', laporan_data: '*',
+  admin_list: 'admin', log_list: '*', laporan_data: '*',
   p_beranda: 'pel reg', p_pelatihan: 'pel reg absen tes', p_ruang: 'pel absen tes tugas eval materi soal', p_materi: 'materi reg',
-  p_riwayat: '*', p_sertifikat: '*'
+  p_riwayat: '*'
 };
 const TULIS = {
   materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_lampiran: 'tugas', p_hapus_tugas: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
   umkm_simpan: 'umkm', umkm_reset_pin: 'umkm', umkm_status: 'umkm', umkm_import: 'umkm', instruktur_simpan: 'ins',
   pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
-  admin_simpan: 'admin', admin_hapus: 'admin', sert_template: 'sert', sert_terbitkan: 'sert',
+  admin_simpan: 'admin', admin_hapus: 'admin', 
   p_absen: 'absen', qr_absen: 'absen', qr_kode: 'pel', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'
 };
 
 // Aksi yang memang bisa lama di server (PDF, unggah, sertifikat) → batas waktu lebih longgar
-const LAMA = { sert_terbitkan: 1, sert_template: 1, sert_preview: 1, laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1, tugas_lampiran: 1, tugas_lampiran_lihat: 1, p_hapus_tugas: 1 };
+const LAMA = { laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1, tugas_lampiran: 1, tugas_lampiran_lihat: 1, p_hapus_tugas: 1 };
 
 /** Penyimpanan cache: memori (instan) + localStorage (bertahan saat aplikasi dibuka ulang). */
 const Simpan = {
@@ -89,7 +89,7 @@ const API = {
    * opt.onRetry(n) dipanggil tiap kali mencoba ulang.
    */
   // Berkas yang sudah pernah dibuka disimpan sementara (sesi ini) → membuka ulang instan
-  _berkas: new Map(), BERKAS: { tugas_file: 1, tugas_lampiran_lihat: 1, p_unduh_sertifikat: 1 },
+  _berkas: new Map(), BERKAS: { tugas_file: 1, tugas_lampiran_lihat: 1 },
   async call(action, data = {}, opt = {}) {
     if (this.BERKAS[action]) {
       const kb = action + ':' + JSON.stringify(data || {});
@@ -99,7 +99,7 @@ const API = {
       if (hasil && hasil.data && hasil.data.length < 8000000) this._berkas.set(kb, hasil);
       return hasil;
     }
-    if (TULIS[action] === 'tugas' || action === 'tugas_nilai' || action === 'sert_terbitkan') this._berkas.clear();
+    if (TULIS[action] === 'tugas' || action === 'tugas_nilai') this._berkas.clear();
     if (!GAS_URL || GAS_URL.indexOf('TEMPEL_') >= 0) throw new Error('GAS_URL belum diisi di js/config.js');
     const k = BACA[action] ? Simpan.kunci(action, data) : null;
     if (k && this._jalan[k] && !opt.onRetry) return this._jalan[k]; // dedupe permintaan baca yang sama
@@ -214,7 +214,7 @@ const API = {
     this._panas = true;
     try {
       if (u.peran === 'peserta') {
-        await this.multi([{ action: 'p_beranda' }, { action: 'p_pelatihan' }, { action: 'p_materi' }, { action: 'p_sertifikat' }, { action: 'p_riwayat' }]);
+        await this.multi([{ action: 'p_beranda' }, { action: 'p_pelatihan' }, { action: 'p_materi' }, { action: 'p_riwayat' }]);
         const b = Simpan.get(Simpan.kunci('p_beranda', {}));
         const ids = b ? b.d.aktif.map(x => x.id_pelatihan) : [];
         const pl = Simpan.get(Simpan.kunci('p_pelatihan', {}));

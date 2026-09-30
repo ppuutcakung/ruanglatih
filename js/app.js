@@ -53,7 +53,7 @@ var App = {
    * Mode Firebase: data berubah (realtime) → gambar ulang halaman "hidup" tanpa mengganggu
    * (tidak saat jendela/form terbuka atau sedang mengetik; posisi gulir dipertahankan).
    */
-  HIDUP: { admin: ['dasbor', 'absensi', 'tes', 'pelatihan', 'tugas'], instruktur: ['dasbor', 'tugas', 'nilai', 'soal'], peserta: ['beranda', 'pelatihan', 'ruang', 'sertifikat', 'nilai'] },
+  HIDUP: { admin: ['dasbor', 'absensi', 'tes', 'pelatihan', 'tugas'], instruktur: ['dasbor', 'tugas', 'nilai', 'soal'], peserta: ['beranda', 'pelatihan', 'ruang', 'nilai'] },
   segarkanDiam() {
     const u = Sesi.user();
     if (!u || this.ruteQR() || $('.overlay')) return;
@@ -345,9 +345,9 @@ var App = {
     UI.modal({
       title: 'Bantuan & Dokumentasi', wide: true,
       body: '<div class="col g20 t-sm" style="font-size:14px;line-height:1.7">' + (admin
-        ? '<div><b>Alur satu pelatihan</b><br>1) Pelatihan → Buat Pelatihan (pilih 1 atau 2 hari). 2) Daftarkan UMKM ke pelatihan. 3) Instruktur mengunggah materi, soal, dan tugas. 4) Saat hari-H buka Absensi dan Pre-test dari Dashboard atau detail pelatihan. 5) Tutup dengan Post-test, Tugas, lalu Evaluasi. 6) Sertifikat → Terbitkan untuk peserta yang lulus. 7) Laporan Rekap → unduh Excel/PDF.</div>' +
+        ? '<div><b>Alur satu pelatihan</b><br>1) Pelatihan → Buat Pelatihan (pilih 1 atau 2 hari). 2) Daftarkan UMKM ke pelatihan. 3) Instruktur mengunggah materi, soal, dan tugas. 4) Saat hari-H buka Absensi dan Pre-test dari Dashboard atau detail pelatihan. 5) Tutup dengan Post-test, Tugas, lalu Evaluasi. 6) Laporan Rekap → unduh Excel/PDF.</div>' +
           '<div><b>Akun peserta</b><br>Peserta masuk memakai <b>Nama UMKM/Usaha</b> + PIN 4 angka dan wajib mengganti PIN awal. Nama UMKM harus unik. Bila lupa PIN atau terkunci (5 kali salah), buka Peserta → tombol kunci untuk reset PIN, lalu kirim lewat WhatsApp.</div>' +
-          '<div><b>Template</b><br>Sertifikat: Google Slides/PPTX 1 halaman dengan penanda {{nama_umkm}} {{nama_pemilik}} {{judul_pelatihan}} {{tanggal_pelatihan}} {{no_sertifikat}}. Laporan: Google Sheets dengan penanda {{tabel}} (atur di Pengaturan).</div>'
+          '<div><b>Template laporan</b><br>Google Sheets dengan penanda {{tabel}} (atur di Pengaturan). Sertifikat diberikan secara fisik kepada peserta.</div>'
         : '<div><b>Tugas instruktur</b><br>1) Pilih pelatihan di pojok kanan atas setiap halaman. 2) Bank Materi → unggah PDF (maks 50 MB, bisa beberapa sekaligus). 3) Pre/Post Test → susun soal pilihan ganda A–E dan kunci jawaban. 4) Periksa Tugas → lihat berkas peserta, beri skor 0–100 dan catatan. 5) Rekap Nilai → pantau kenaikan pre ke post.</div>' +
           '<div><b>Catatan</b><br>Pembukaan absensi, tes, tugas, dan evaluasi diatur oleh admin PPU. Hasil evaluasi kepuasan hanya dapat dilihat admin.</div>') +
         '<div><b>Butuh bantuan?</b><br><a href="' + this.linkWA() + '" target="_blank" rel="noopener">Hubungi admin PPU via WhatsApp</a></div></div>'

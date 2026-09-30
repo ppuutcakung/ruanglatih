@@ -2,11 +2,11 @@
    RuangLatih — peserta.js
    Tampilan Peserta UMKM (mobile-first): beranda, pelatihan saya,
    ruang pelatihan (absensi, materi, tugas, pre/post-test,
-   evaluasi), bank materi, sertifikat, nilai, profil.
+   evaluasi), bank materi, nilai, profil.
    ============================================================= */
 const Peserta = {
   cache: {},
-  nav: [['beranda', 'home', 'Beranda'], ['pelatihan', 'cap', 'Pelatihan'], ['materi', 'book', 'Materi'], ['sertifikat', 'award', 'Sertifikat'], ['profil', 'user', 'Profil']],
+  nav: [['beranda', 'home', 'Beranda'], ['pelatihan', 'cap', 'Pelatihan'], ['materi', 'book', 'Materi'], ['nilai', 'chart', 'Nilai'], ['profil', 'user', 'Profil']],
   navAktif(r) { return { ruang: 'pelatihan', tes: 'pelatihan', evaluasi: 'pelatihan', nilai: 'profil' }[r] || r; },
 
   rute: {
@@ -16,7 +16,6 @@ const Peserta = {
     tes: (v, a) => Peserta.tes(v, a),
     evaluasi: (v, a) => Peserta.evaluasi(v, a),
     materi: (v, a) => Peserta.materi(v, a),
-    sertifikat: (v, a) => Peserta.sertifikat(v, a),
     nilai: (v, a) => Peserta.nilai(v, a),
     profil: (v, a) => Peserta.profil(v, a)
   },
@@ -49,7 +48,7 @@ const Peserta = {
     const m = UI.modal({
       title: 'Menu',
       body: '<div class="row" style="margin-bottom:16px"><div class="avatar" style="border-color:var(--blush-3)">' + esc(UI.inisial(u.nama)) + '</div><div><div class="semi">' + esc(u.nama) + '</div><div class="t-sm muted">' + esc(u.umkm) + ' · ' + esc(u.sektor) + '</div></div></div>' +
-        '<div class="list">' + it('#/beranda', 'home', 'Beranda') + it('#/pelatihan', 'cap', 'Pelatihan Saya') + it('#/materi', 'book', 'Bank Materi') + it('#/nilai', 'chart', 'Riwayat & Skor Nilai') + it('#/sertifikat', 'award', 'Sertifikat') + it('#/profil', 'user', 'Profil & Ganti PIN') +
+        '<div class="list">' + it('#/beranda', 'home', 'Beranda') + it('#/pelatihan', 'cap', 'Pelatihan Saya') + it('#/materi', 'book', 'Bank Materi') + it('#/nilai', 'chart', 'Riwayat & Skor Nilai') + it('#/profil', 'user', 'Profil & Ganti PIN') +
         '<a class="item" href="' + App.linkWA('Halo Admin PPU, saya ' + (u.nama || '') + ' (' + (u.umkm || '') + ') butuh bantuan akun ' + APP_CONFIG.nama + '.') + '" target="_blank" rel="noopener"><div class="ic-tile sm ok">' + UI.ic('message', 'sm') + '</div><div class="grow semi">Hubungi Admin</div>' + UI.ic('chevR', 'sm') + '</a>' +
         '<button class="item" data-keluar><div class="ic-tile sm" style="background:var(--bad-bg);color:var(--bad)">' + UI.ic('logout', 'sm') + '</div><div class="grow semi c-bad">Keluar</div></button></div>'
     });
@@ -63,7 +62,7 @@ const Peserta = {
   async beranda(v) {
     const u = this.user();
     v.innerHTML = this.hero({ judul: APP_CONFIG.nama, sub: esc(this.panggil(u)), desc: 'Semangat kembangkan usahamu hari ini!' }) +
-      this.cari('Cari materi, jadwal, atau sertifikat…') + '<div class="m-body" style="margin-top:24px" data-isi></div>';
+      this.cari('Cari materi atau jadwal pelatihan…') + '<div class="m-body" style="margin-top:24px" data-isi></div>';
     this.pasangCari(v);
     const isi = $('[data-isi]', v);
     UI.loading(isi, 3);
@@ -71,7 +70,7 @@ const Peserta = {
       const akt = d.aktif[0] ? d.aktif[0].id_pelatihan : '';
       const r = t => akt ? '#/ruang/' + akt + '/' + t : '#/pelatihan';
       const q = [['#/pelatihan', 'calendar', 'Jadwal'], [r('absensi'), 'checkSquare', 'Presensi'], ['#/materi', 'book', 'Modul'], [r('tugas'), 'clipboard', 'Tugas'],
-        [r('tes'), 'fileQ', 'Pre-Post Test'], ['#/nilai', 'chart', 'Skor Nilai'], [r('evaluasi'), 'edit', 'Evaluasi'], ['#/sertifikat', 'award', 'Sertifikat']];
+        [r('tes'), 'fileQ', 'Pre-Post Test'], ['#/nilai', 'chart', 'Skor Nilai'], [r('evaluasi'), 'edit', 'Evaluasi'], ['#/profil', 'user', 'Profil']];
       isi.innerHTML = '<section><div class="sec-h"><h2>Akses Cepat</h2><a class="link" href="#/pelatihan">Lihat Semua</a></div><div class="quick">' +
         q.map((x, i) => '<a class="q' + (i + 1) + '" href="' + x[0] + '"><span class="qi">' + UI.ic(x[1], 'sm') + '</span>' + x[2] + '</a>').join('') + '</div></section>' +
         '<section><div class="sec-h"><h2>Agenda Pelatihan</h2>' + (d.agenda.length ? '<a class="link" href="#/pelatihan">Semua</a>' : '') + '</div>' +
@@ -202,7 +201,7 @@ const Peserta = {
       '<span class="row g8">' + UI.ic('layers', 'sm') + '<span><b>Sektor:</b> ' + esc(p.cakupan === 'sektor' ? p.sektor : 'Umum (semua sektor)') + '</span></span></div>' +
       (p.link_dokumentasi ? '<a class="btn secondary block mt12" href="' + esc(p.link_dokumentasi) + '" target="_blank" rel="noopener">' + UI.ic('image', 'sm') + 'Lihat Dokumentasi Pelatihan</a>' : '') + '</div>' + slot +
       '<div class="card well"><div class="row between"><span class="semi t-sm">Status kelulusan</span>' + UI.chipLulus(st.lulus) + '</div>' +
-      (st.kurang.length ? '<div class="t-sm muted mt8">Yang masih kurang: ' + st.kurang.map(esc).join(' · ') + '</div>' : '<div class="t-sm muted mt8">Semua syarat terpenuhi. Sertifikat diterbitkan admin setelah pelatihan selesai.</div>') + '</div>';
+      (st.kurang.length ? '<div class="t-sm muted mt8">Yang masih kurang: ' + st.kurang.map(esc).join(' · ') + '</div>' : '<div class="t-sm muted mt8">Semua syarat kelulusan terpenuhi. Selamat!</div>') + '</div>';
   },
 
   ikonMateri(j) {
@@ -450,29 +449,6 @@ const Peserta = {
   },
 
   // ===========================================================
-  // SERTIFIKAT
-  // ===========================================================
-  async sertifikat(v) {
-    v.innerHTML = this.hero({ judul: 'Sertifikat', desc: 'Unduh sertifikat pelatihan yang sudah Anda selesaikan.', slim: true }) + '<div class="m-body" style="margin-top:20px" data-isi></div>';
-    const isi = $('[data-isi]', v);
-    UI.loading(isi, 2);
-    const gambar = rows => {
-      const ada = rows.filter(r => r.tersedia).length;
-      isi.innerHTML = '<div class="grid g2" style="grid-template-columns:1fr 1fr"><div class="card stat"><span class="l">Sertifikat siap</span><span class="v c-primary">' + ada + '</span></div><div class="card stat"><span class="l">Pelatihan diikuti</span><span class="v">' + rows.length + '</span></div></div>' +
-        (rows.length ? rows.map(r => '<div class="card"><div class="row top"><div class="ic-tile ' + (r.tersedia ? 'solid' : '') + '">' + UI.ic('award') + '</div><div class="grow"><div class="h-sm">' + esc(r.judul) + '</div><div class="t-sm muted">' + esc(r.tanggal) + ' · ' + esc(r.instruktur) + '</div>' +
-          (r.no_sertifikat ? '<div class="t-xs muted mt8">No. ' + esc(r.no_sertifikat) + '</div>' : '') + '</div></div>' +
-          (r.tersedia ? '<button class="btn primary block mt12" data-aksi="unduh" data-id="' + esc(r.id_pelatihan) + '">' + UI.ic('download', 'sm') + 'Unduh Sertifikat (PDF)</button>'
-            : (r.lulus ? '<div class="card well tight mt12 row">' + UI.ic('clock', 'sm') + '<span class="t-sm">Anda lulus. Sertifikat sedang disiapkan admin.</span></div>'
-              : '<div class="card well tight mt12"><div class="row g8">' + UI.chipLulus(false) + '</div><div class="t-sm muted mt8">' + r.kurang.map(esc).join(' · ') + '</div></div>')) + '</div>').join('')
-          : '<div class="card">' + UI.kosong('Belum ada pelatihan yang diikuti.', 'award') + '</div>');
-    };
-    UI.klik(isi, {
-      unduh: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('p_unduh_sertifikat', { id_pelatihan: b.dataset.id }), 'Sertifikat')); } catch (e) { UI.gagal(e); } }
-    });
-    try { await this.ambil(v, 'p_sertifikat', {}, gambar); } catch (e) { UI.galat(isi, e, () => this.sertifikat(v)); }
-  },
-
-  // ===========================================================
   // RIWAYAT & SKOR NILAI
   // ===========================================================
   async nilai(v) {
@@ -498,7 +474,6 @@ const Peserta = {
     v.innerHTML = this.hero({ judul: u.nama || 'Profil', sub: esc(u.umkm || ''), desc: 'Sektor ' + (u.sektor || '-'), slim: true }) +
       '<div class="m-body" style="margin-top:20px"><div class="list">' +
       '<a class="item" href="#/nilai"><div class="ic-tile sm">' + UI.ic('chart', 'sm') + '</div><div class="grow"><div class="semi">Riwayat & Skor Nilai</div><div class="t-xs muted">Kehadiran, pre/post-test, tugas</div></div>' + UI.ic('chevR', 'sm') + '</a>' +
-      '<a class="item" href="#/sertifikat"><div class="ic-tile sm">' + UI.ic('award', 'sm') + '</div><div class="grow"><div class="semi">Sertifikat Saya</div><div class="t-xs muted">Unduh sertifikat PDF</div></div>' + UI.ic('chevR', 'sm') + '</a>' +
       '<button class="item" data-pin><div class="ic-tile sm">' + UI.ic('key', 'sm') + '</div><div class="grow"><div class="semi">Ganti PIN</div><div class="t-xs muted">PIN 4 angka untuk masuk</div></div>' + UI.ic('chevR', 'sm') + '</button>' +
       '<a class="item" target="_blank" rel="noopener" href="' + App.linkWA('Halo Admin PPU, saya ' + (u.nama || '') + ' (' + (u.umkm || '') + ') ingin memperbarui data profil UMKM.') + '"><div class="ic-tile sm ok">' + UI.ic('message', 'sm') + '</div><div class="grow"><div class="semi">Hubungi Admin PPU</div><div class="t-xs muted">Ubah data profil, lupa PIN, pendaftaran</div></div>' + UI.ic('chevR', 'sm') + '</a>' +
       '<button class="item" data-keluar><div class="ic-tile sm" style="background:var(--bad-bg);color:var(--bad)">' + UI.ic('logout', 'sm') + '</div><div class="grow semi c-bad">Keluar</div></button></div>' +
