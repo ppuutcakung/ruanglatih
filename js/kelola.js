@@ -416,7 +416,8 @@ const Kelola = {
         '<div class="card"><div class="card-h"><div class="h-sm">Daftar Tugas</div></div>' +
         (data.tugas.length ? '<div class="list">' + data.tugas.map(t => '<div class="item" style="align-items:flex-start"><div class="ic-tile sm">' + UI.ic('clipboard', 'sm') + '</div><div class="grow"><div class="semi">' + esc(t.judul) + '</div>' +
           '<div class="t-sm muted clamp2">' + esc(t.instruksi) + '</div>' +
-          (t.nama_lampiran ? '<button class="chip line sm mt8" data-aksi="lampiranT" data-id="' + esc(t.id_tugas) + '"' + (t._unggah ? ' disabled' : '') + '>' + UI.ic(/pdf/.test(t.tipe_lampiran || t.nama_lampiran) ? 'file' : 'image', 'sm') + esc(t.nama_lampiran) + (t._unggah ? ' · mengunggah…' : '') + '</button>' : '') + '<div class="meta mt8">' + (idPel ? '' : '<span>' + esc(t.pelatihan) + '</span>') + '<span>' + UI.ic('clock', 'sm') + (t.batas_waktu ? 'Batas ' + UI.waktu(t.batas_waktu) : 'Tanpa batas waktu') + '</span><span>' + t.jumlah_kumpul + ' terkumpul</span></div></div>' +
+          (t.nama_lampiran ? '<div class="row wrap g8 mt8" style="align-items:center"><span class="chip line sm">' + UI.ic(/pdf/.test(t.tipe_lampiran || t.nama_lampiran) ? 'file' : 'image', 'sm') + esc(t.nama_lampiran) + (t._unggah ? ' · mengunggah…' : '') + '</span>' +
+            (t._unggah ? '' : '<button class="btn xs outline" data-aksi="lampiranT" data-id="' + esc(t.id_tugas) + '">' + UI.ic('eye', 'sm') + 'Lihat</button><button class="btn xs outline" data-aksi="lampiranU" data-id="' + esc(t.id_tugas) + '">' + UI.ic('download', 'sm') + 'Unduh</button>') + '</div>' : '') + '<div class="meta mt8">' + (idPel ? '' : '<span>' + esc(t.pelatihan) + '</span>') + '<span>' + UI.ic('clock', 'sm') + (t.batas_waktu ? 'Batas ' + UI.waktu(t.batas_waktu) : 'Tanpa batas waktu') + '</span><span>' + t.jumlah_kumpul + ' terkumpul</span></div></div>' +
           '<div class="row g4"><button class="btn icon sm secondary" data-aksi="ubahT" data-id="' + t.id_tugas + '" title="Ubah">' + UI.ic('edit', 'sm') + '</button><button class="btn icon sm danger" data-aksi="hapusT" data-id="' + t.id_tugas + '" title="Hapus">' + UI.ic('trash', 'sm') + '</button></div></div>').join('') + '</div>'
           : UI.kosong('Belum ada tugas.', 'clipboard')) + '</div></div>';
     };
@@ -478,6 +479,7 @@ const Kelola = {
       });
     };
     const peta = {
+      lampiranU: async b => { try { await UI.sibuk(b, async () => UI.unduhBerkas(await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id })), 'Mengunduh…'); } catch (e) { UI.gagal(e); } },
       lampiranT: async b => { try { await UI.sibuk(b, async () => { const f = await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }); UI.lihatBerkas(f, 'Lampiran tugas'); }, 'Membuka…'); } catch (e) { UI.gagal(e); } },
       buat: () => idPel ? editor() : UI.toast('Pilih satu pelatihan terlebih dahulu.', 'info'),
       ubahT: b => editor(data.tugas.find(t => t.id_tugas === b.dataset.id)),
@@ -504,12 +506,16 @@ const Kelola = {
       '<div class="meta"><span>' + esc(k.judul_tugas) + '</span><span>Oleh ' + esc(k.nama_pemilik) + ' · ' + UI.relatif(k.waktu_kumpul) + '</span></div>' +
       (k.dinilai ? '<div class="row g8 mt8"><span class="chip ok sm">Skor ' + UI.angka(k.skor) + '</span>' + (k.catatan ? '<span class="t-xs muted clamp1">“' + esc(k.catatan) + '”</span>' : '') + '</div>' : '') + '</div>' +
       '<div class="row g8"><button class="btn sm outline" data-aksi="lihatK" data-t="' + esc(k.id_tugas) + '" data-u="' + esc(k.id_umkm) + '">' + UI.ic('eye', 'sm') + 'Lihat</button>' +
+        '<button class="btn sm outline" data-aksi="unduhK" data-t="' + esc(k.id_tugas) + '" data-u="' + esc(k.id_umkm) + '">' + UI.ic('download', 'sm') + 'Unduh</button>' +
       (bolehNilai ? '<button class="btn sm primary" data-aksi="nilaiK" data-t="' + esc(k.id_tugas) + '" data-u="' + esc(k.id_umkm) + '">' + UI.ic('edit', 'sm') + (k.dinilai ? 'Ubah Nilai' : 'Beri Nilai') + '</button>' : '') + '</div></div>';
   },
 
   /** Tambahkan aksi lihat berkas & beri nilai ke peta klik. */
   pasangAksiKumpul(peta, ambil, sesudah) {
     const cari = b => ambil().find(k => k.id_tugas === b.dataset.t && k.id_umkm === b.dataset.u);
+    peta.unduhK = async b => {
+      try { await UI.sibuk(b, async () => UI.unduhBerkas(await API.call('tugas_file', { id_tugas: b.dataset.t, id_umkm: b.dataset.u })), 'Mengunduh…'); } catch (e) { UI.gagal(e); }
+    };
     peta.lihatK = async b => {
       try { await UI.sibuk(b, async () => { const f = await API.call('tugas_file', { id_tugas: b.dataset.t, id_umkm: b.dataset.u }); const k = cari(b); UI.lihatBerkas(f, k ? k.nama_umkm + ' — ' + k.judul_tugas : f.nama); }, 'Membuka…'); } catch (e) { UI.gagal(e); }
     };

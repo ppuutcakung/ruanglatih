@@ -361,6 +361,13 @@ const UI = {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   },
   /** Tampilkan berkas (gambar/PDF) di modal dengan tombol Buka & Unduh. */
+  /** Unduh berkas {nama, tipe, data(base64)} langsung ke perangkat. */
+  unduhBerkas(o) {
+    const url = URL.createObjectURL(UI.base64KeBlob(o)), a = document.createElement('a');
+    a.href = url; a.download = o.nama || 'berkas'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    UI.toast('Mengunduh ' + (o.nama || 'berkas') + '…');
+  },
   lihatBerkas(o, judul) {
     const blob = UI.base64KeBlob(o);
     const url = URL.createObjectURL(blob);

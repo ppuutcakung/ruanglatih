@@ -176,6 +176,8 @@ const Peserta = {
           try { await UI.sibuk(b, async () => { const r = await API.call('p_hapus_tugas', { id_tugas: b.dataset.id }, { retry: 4 }); UI.toast(r.message); }, 'Menghapus…'); muatUlang(); }
           catch (e) { UI.gagal(e); muatUlang(); }
         },
+        lampiranU: async b => { try { await UI.sibuk(b, async () => UI.unduhBerkas(await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id })), 'Mengunduh…'); } catch (e) { UI.gagal(e); } },
+        unduhK: async b => { try { await UI.sibuk(b, async () => UI.unduhBerkas(await API.call('tugas_file', { id_tugas: b.dataset.id })), 'Mengunduh…'); } catch (e) { UI.gagal(e); } },
         lampiran: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }), 'Lampiran tugas'), 'Membuka…'); } catch (e) { UI.gagal(e); } }
     };
     try { await this.ambil(v, 'p_ruang', { id_pelatihan: id }, gambar); } catch (e) { UI.galat(isi, e, () => this.ruang(v, a)); }
@@ -237,11 +239,12 @@ const Peserta = {
       return '<div class="card"><div class="row between top"><div class="h-sm">' + esc(x.judul) + '</div>' +
         (k ? (k.dinilai ? '<span class="chip ok">Skor ' + UI.angka(k.skor) + '</span>' : '<span class="chip warn dot sm">Menunggu nilai</span>') : (x.lewat ? '<span class="chip bad sm">Terlewat</span>' : '<span class="chip line sm">Belum kumpul</span>')) + '</div>' +
         '<div class="t-sm muted mt8" style="white-space:pre-line">' + esc(x.instruksi) + '</div>' +
-        (x.nama_lampiran ? '<button class="card well tight row mt12" data-aksi="lampiran" data-id="' + esc(x.id_tugas) + '" style="width:100%;text-align:left;cursor:pointer"><div class="ic-tile sm">' + UI.ic(/pdf/.test(x.tipe_lampiran) ? 'file' : 'image', 'sm') + '</div>' +
-          '<div class="grow"><div class="semi t-sm clamp1">' + esc(x.nama_lampiran) + '</div><div class="t-xs muted">Lampiran dari instruktur · ketuk untuk membuka</div></div>' + UI.ic('eye', 'sm') + '</button>' : '') +
+        (x.nama_lampiran ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(/pdf/.test(x.tipe_lampiran) ? 'file' : 'image', 'sm') + '</div>' +
+          '<div class="grow" style="min-width:0"><div class="semi t-sm clamp1">' + esc(x.nama_lampiran) + '</div><div class="t-xs muted">Lampiran dari instruktur</div></div></div>' +
+          '<div class="row g8 mt8"><button class="btn sm outline grow" data-aksi="lampiran" data-id="' + esc(x.id_tugas) + '">' + UI.ic('eye', 'sm') + 'Lihat</button><button class="btn sm outline grow" data-aksi="lampiranU" data-id="' + esc(x.id_tugas) + '">' + UI.ic('download', 'sm') + 'Unduh</button></div></div>' : '') +
         (x.batas_waktu ? '<div class="t-xs mt8 row g4 ' + (x.lewat ? 'c-bad' : 'c-warn') + '">' + UI.ic('clock', 'sm') + 'Batas: ' + UI.waktu(x.batas_waktu) + '</div>' : '') +
         (k ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(/pdf/.test(k.tipe_file) ? 'file' : 'image', 'sm') + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(k.nama_file) + '</div><div class="t-xs muted">Dikirim ' + UI.waktu(k.waktu) + '</div></div>' +
-          '<button class="btn xs outline" data-aksi="lihat" data-id="' + esc(x.id_tugas) + '">Lihat</button></div>' + (k.catatan ? '<div class="t-sm mt8"><b>Catatan instruktur:</b> ' + esc(k.catatan) + '</div>' : '') + '</div>' : '') +
+          '<div class="row g4"><button class="btn xs outline" data-aksi="lihat" data-id="' + esc(x.id_tugas) + '">' + UI.ic('eye', 'sm') + 'Lihat</button><button class="btn xs outline" data-aksi="unduhK" data-id="' + esc(x.id_tugas) + '">' + UI.ic('download', 'sm') + 'Unduh</button></div></div>' + (k.catatan ? '<div class="t-sm mt8"><b>Catatan instruktur:</b> ' + esc(k.catatan) + '</div>' : '') + '</div>' : '') +
         (boleh && !k ? '<button class="btn primary block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + 'Unggah Tugas</button><div class="hint center mt8">Foto (kamera / galeri) atau PDF · maksimal 10 MB</div>' : '') +
         (boleh && k ? '<button class="btn danger block mt12" data-aksi="hapusK" data-id="' + esc(x.id_tugas) + '">' + UI.ic('trash', 'sm') + 'Hapus Kiriman</button><div class="hint center mt8">Salah berkas? Hapus kiriman ini, lalu unggah ulang berkas yang benar.</div>' : '') +
         (k && !k.dinilai && !boleh ? '<div class="hint center mt8">Kiriman tidak bisa diubah lagi (' + (x.lewat ? 'batas waktu sudah lewat' : 'pengumpulan sudah ditutup') + ').</div>' : '') + '</div>';

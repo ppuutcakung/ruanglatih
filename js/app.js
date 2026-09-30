@@ -12,11 +12,29 @@ var App = {
 
   async cekServer() {
     if (this._server) return this._server;
-    try {
-      const r = await fetch(GAS_URL, { method: 'GET', redirect: 'follow' });
-      this._server = await r.json();
-    } catch (e) { this._server = null; }
-    return this._server;
+    if (this._cekP) return this._cekP;
+    this._cekP = (async () => {
+      for (let n = 0; n < 2; n++) { // server "bangun" dulu bila lama tidak dipakai → coba sekali lagi
+        try {
+          const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 25000);
+          const r = await fetch(GAS_URL, { method: 'GET', redirect: 'follow', signal: ctl.signal });
+          clearTimeout(t);
+          this._server = await r.json();
+          return this._server;
+        } catch (e) { await new Promise(r => setTimeout(r, 1500)); }
+      }
+      return null;
+    })();
+    const h = await this._cekP; this._cekP = null;
+    return h;
+  },
+  /** Status koneksi (mode Firebase): dari koneksi internet & sinkron realtime — tanpa membebani server. */
+  statusSinkron() {
+    const s = $('[data-srv]');
+    if (!s) return;
+    const on = navigator.onLine !== false;
+    s.className = 'chip hide-m ' + (on ? 'ok dot' : 'warn');
+    s.textContent = on ? 'Tersinkron · Realtime' : 'Offline — perubahan disimpan di perangkat';
   },
 
   /** Tautan dari scan QR absensi: #/absen/<id_pelatihan>/<kode> */
@@ -163,7 +181,7 @@ var App = {
       } else data = { peran: 'admin', username: $('#m_user').value.trim(), password: $('#m_pw').value };
       try {
         await UI.sibuk(btn, async ubah => {
-          const r = await API.call('login', data, { onRetry: n => ubah('Server sibuk, mencoba lagi (' + n + ')…') });
+          const r = await API.call('login', data, { retry: 6, onRetry: n => ubah('Menghubungkan ulang (' + n + ')…') });
           Sesi.set({ token: r.token, user: r.user });
           if (r.fb_token && FBC.aktif()) FBC.masuk(r.fb_token).catch(() => { }); // Firebase (migrasi) — di latar
         }, 'Memeriksa…');
@@ -177,10 +195,11 @@ var App = {
       }
     };
     gambar();
+    // Cek server sekaligus "membangunkan" server selagi pengguna mengetik → login lebih cepat
     this.cekServer().then(h => {
       const s = $('[data-srv]', app);
       if (!s) return;
-      if (!h) { s.textContent = 'Server belum terhubung'; }
+      if (!h) { s.textContent = 'Menghubungkan ke server…'; setTimeout(() => { this._server = null; this.cekServer().then(x => { const y = $('[data-srv]'); if (y) y.textContent = x && x.siap ? 'Server Aktif' : 'Server lambat — tetap bisa dicoba'; }); }, 5000); }
       else if (!h.siap) s.textContent = 'Server belum di-setup';
       else s.textContent = 'Server Aktif';
     });
@@ -332,11 +351,13 @@ var App = {
     };
     const cari = $('[data-cari]', app);
     if (cari) cari.onsubmit = e => { e.preventDefault(); const q = $('input', cari).value.trim(); location.hash = '#/cari/' + encodeURIComponent(q); };
+    if (API.modeFB()) { this.statusSinkron(); return; } // mode Firebase: tidak perlu cek server berulang
+    if (!admin) { const s = $('[data-srv]', app); if (s) s.remove(); return; }
     this.cekServer().then(h => {
       const s = $('[data-srv]', app);
       if (!s) return;
-      s.className = 'chip hide-m ' + (h && h.siap ? 'ok dot' : 'bad');
-      s.textContent = h && h.siap ? (admin ? 'Sistem Siaga (Server Aktif)' : 'Google Drive & Sheets Terhubung') : 'Server tidak terhubung';
+      s.className = 'chip hide-m ' + (h && h.siap ? 'ok dot' : 'warn');
+      s.textContent = h && h.siap ? 'Sistem Siaga (Server Aktif)' : 'Server lambat merespons — coba lagi sebentar';
     });
   },
 
@@ -415,7 +436,10 @@ var App = {
     let b = null;
     try { b = JSON.parse(localStorage.getItem('rl_brand') || 'null'); } catch (e) { }
     this.terapkanBrand(b);
-    API._kirim('branding', {}, { retry: 2 }).then(baru => this.simpanBrand(baru, JSON.stringify(b))).catch(() => { });
+    // Hemat antrean server: identitas disegarkan paling sering tiap 30 menit, dan tidak berbarengan dengan login
+    const t = parseInt(localStorage.getItem('rl_brand_t') || '0', 10);
+    if (b && Date.now() - t < 1800000) return;
+    setTimeout(() => API._kirim('branding', {}, { retry: 2 }).then(baru => { try { localStorage.setItem('rl_brand_t', String(Date.now())); } catch (e) { } this.simpanBrand(baru, JSON.stringify(b)); }).catch(() => { }), b ? 4000 : 0);
   },
   simpanBrand(baru, lamaStr) {
     const s = JSON.stringify(baru);
@@ -427,6 +451,7 @@ var App = {
   },
 
   mulai() {
+    ['online', 'offline'].forEach(ev => window.addEventListener(ev, () => { if (API.modeFB()) this.statusSinkron(); if (ev === 'online') UI.toast('Koneksi kembali — data disinkronkan.', 'info'); else UI.toast('Koneksi terputus — perubahan disimpan di perangkat dan dikirim otomatis.', 'info'); }));
     // Akun berganti / keluar di tab lain pada browser yang sama → tab ini ikut menyesuaikan
     window.addEventListener('storage', e => {
       if (e.key !== 'rl_sesi_v1') return;

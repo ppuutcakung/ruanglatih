@@ -758,7 +758,7 @@ const Admin = {
   // ABSENSI
   // ===========================================================
   async absensi(el) {
-    el.innerHTML = Kelola.kepala('Absensi', 'Peserta absen lewat scan QR di ruang pelatihan atau tombol absen di aplikasi', '<span data-picker></span><button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button><button class="btn outline sm" data-aksi="pdf">' + UI.ic('download', 'sm') + 'Ekspor PDF</button><button class="btn primary sm" data-aksi="qr">' + UI.ic('checkSquare', 'sm') + 'QR Absensi</button>') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Absensi', 'Peserta absen lewat scan QR di ruang pelatihan atau tombol absen di aplikasi', '<span data-picker></span><button class="btn outline sm" data-aksi="segar">' + UI.ic('refresh', 'sm') + 'Segarkan</button><button class="btn outline sm" data-aksi="xlsx">' + UI.ic('download', 'sm') + 'Excel</button><button class="btn outline sm" data-aksi="pdf">' + UI.ic('download', 'sm') + 'PDF</button><button class="btn primary sm" data-aksi="qr">' + UI.ic('checkSquare', 'sm') + 'QR Absensi</button>') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     let idPel = '', detAbs = null;
     const muat = async () => {
@@ -790,10 +790,8 @@ const Admin = {
         }
         this.modalQR(detAbs.pelatihan, detAbs.qr_kode);
       },
-      pdf: b => {
-        if (!idPel) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
-        UI.sibuk(b, async () => { const r = await API.call('absensi_export', { id_pelatihan: idPel }, { retry: 2 }); UI.unduhBase64(r); UI.toast('PDF absensi diunduh: ' + r.nama); }, 'Menyusun PDF…').catch(UI.gagal);
-      },
+      xlsx: b => this.eksporAbsensi(b, detAbs, 'xlsx'),
+      pdf: b => this.eksporAbsensi(b, detAbs, 'pdf'),
       togel: b => this.aksiTogel(b, v => { const t = b.parentNode.querySelector('.t-sm.semi'); if (t) t.textContent = v ? 'Dibuka' : 'Ditutup'; })
     });
     try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); }); } catch (e) { UI.galat(isi, e, () => this.absensi(el)); }
@@ -938,11 +936,66 @@ const Admin = {
     rebuildPicker();
   },
 
+  /** Pengaturan yang sudah ada di perangkat (tanpa menunggu server). */
+  setelan() {
+    const c = Simpan.get(Simpan.kunci('pengaturan_get', {}));
+    if (c) return c.d;
+    try { if (API.modeFB() && window.FSD) return FSD.kol('pengaturan').find(x => x._id === 'umum') || {}; } catch (e) { }
+    return {};
+  },
+  /** Tanggal "2026-09-25 s.d. 2026-09-26" → "25 Sep 2026 – 26 Sep 2026". */
+  tglRapi(t) { return String(t || '').replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x)).replace(' s.d. ', ' – '); },
+
+  /** Ekspor Laporan Rekap — format baku, langsung di browser. */
+  eksporLaporan(jenis, rows, f, pel) {
+    const st = this.setelan(), lembaga = st.NAMA_LEMBAGA || APP_CONFIG.lembaga;
+    const periode = f.bulan ? UI.bulanLabel(f.bulan) : 'Semua periode';
+    const judul = 'Rekap Pelatihan UMKM — ' + (f.id_pelatihan ? pel[f.id_pelatihan] : 'Semua pelatihan');
+    const info = 'Periode: ' + periode + ' · Sektor: ' + (f.sektor || 'Semua sektor') + (f.nama ? ' · Pencarian: "' + f.nama + '"' : '') + ' · Dicetak: ' + UI.tglHari(UI.hariIni());
+    const x = jenis === 'xlsx', n = v => (v === null || v === undefined || v === '') ? (x ? '' : '–') : (x ? Number(v) : UI.angka(v));
+    const header = ['No', 'Nama UMKM', 'Peserta', 'Sektor', 'No. HP', 'Pelatihan', 'Tanggal', 'Kehadiran', 'Pre-test', 'Post-test', 'Kenaikan', 'Skor Tugas', 'Tugas', 'Evaluasi', 'Status'];
+    const baris = rows.map((r, i) => [i + 1, r.nama_umkm, r.nama_pemilik, r.sektor, r.no_hp, r.pelatihan, this.tglRapi(r.tanggal), r.hadir + ' / ' + r.jumlah_hari + ' hari',
+      n(r.pre), n(r.post), r.kenaikan === null || r.kenaikan === undefined ? (x ? '' : '–') : (x ? r.kenaikan : (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan)),
+      n(r.skor_tugas), r.tugas, r.evaluasi ? 'Sudah' : 'Belum', r.lulus ? 'Lulus' : 'Belum lulus']);
+    const lulus = rows.filter(r => r.lulus).length;
+    const rata = a => { a = a.filter(v => v !== null && v !== undefined); return a.length ? Math.round(a.reduce((s, v) => s + v, 0) / a.length * 10) / 10 : '–'; };
+    const cat = ['Jumlah: ' + rows.length + ' peserta · Lulus: ' + lulus + ' (' + (rows.length ? Math.round(lulus / rows.length * 100) : 0) + '%) · Rata-rata Pre → Post: ' + rata(rows.map(r => r.pre)) + ' → ' + rata(rows.map(r => r.post)),
+      'Dicetak dari ' + APP_CONFIG.nama + ' · ' + lembaga];
+    const nama = 'Rekap ' + (f.id_pelatihan ? pel[f.id_pelatihan] : 'Pelatihan UMKM') + ' ' + UI.hariIni();
+    const o = { nama: nama, lembar: 'Rekap', kop: [judul, lembaga, info], header: header, baris: baris, catatan: cat,
+      lebar: x ? [5, 26, 22, 12, 15, 30, 24, 13, 9, 9, 10, 11, 9, 10, 13] : [3, 12, 10, 7, 9, 12, 10, 6, 4.5, 4.5, 5, 5, 4, 5.5, 6.5],
+      rata: ['c', 'l', 'l', 'c', 'c', 'l', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c'] };
+    if (!rows.length) return UI.toast('Tidak ada data untuk diekspor pada filter ini.', 'info');
+    if (x) { EKSPOR.xlsx(o); UI.toast('Excel diunduh (' + rows.length + ' baris).'); }
+    else { EKSPOR.pdf(o); UI.toast('Pilih "Simpan sebagai PDF" di jendela cetak.', 'info'); }
+  },
+
+  /** Ekspor daftar hadir satu pelatihan — format baku, langsung di browser. */
+  async eksporAbsensi(b, det, jenis) {
+    if (!det || !det.pelatihan) return UI.toast('Pilih pelatihan terlebih dahulu.', 'info');
+    let alamat = {};
+    try { const u = await API.cepat('umkm_list'); u.forEach(x => alamat[x.id_umkm] = x.alamat); } catch (e) { }
+    const p = det.pelatihan, hari = p.tanggal_hari || [p.tanggal_mulai], hi = UI.hariIni(), x = jenis === 'xlsx';
+    const judul = /^pelatihan\b/i.test(p.judul) ? p.judul : 'Pelatihan ' + p.judul;
+    const info = 'Tanggal pelaksanaan: ' + hari.map(t => UI.tglHari(t)).join(' dan ') + '  ·  Instruktur: ' + (p.instruktur || '-');
+    const ket = (w, t) => w ? 'Hadir (' + UI.jam(w) + ')' : (t < hi ? 'Tidak hadir' : 'Belum absen');
+    const header = ['No', 'Nama UMKM / Usaha', 'Peserta', 'Sektor', 'Nomor HP Peserta', 'Alamat'].concat(hari.length > 1 ? hari.map((t, i) => 'Kehadiran Hari ' + (i + 1) + ' (' + UI.tglPendek(t) + ')') : ['Konfirmasi Kehadiran']);
+    const baris = det.peserta.map((r, i) => [i + 1, r.nama_umkm, r.nama_pemilik, r.sektor, r.no_hp, alamat[r.id_umkm] || '-'].concat(hari.map((t, j) => ket((r.absen || {})[j + 1], t))));
+    const rekap = hari.map((t, j) => 'Hari ' + (j + 1) + ': ' + det.peserta.filter(r => (r.absen || {})[j + 1]).length + ' dari ' + det.peserta.length + ' hadir').join('  ·  ');
+    const dua = hari.length > 1;
+    const o = { nama: 'Absensi ' + p.judul + ' ' + hi, lembar: 'Absensi', kop: [judul, 'Pusat Pendampingan UMKM Cakung', info], header: header, baris: baris,
+      catatan: ['Rekap kehadiran — ' + rekap, 'Dicetak dari ' + APP_CONFIG.nama + ' pada ' + UI.tglHari(hi)],
+      lebar: x ? [5, 28, 22, 12, 17, 36].concat(hari.map(() => dua ? 20 : 24)) : [4, 17, 14, 8, 11, 20].concat(hari.map(() => dua ? 13 : 26)),
+      rata: ['c', 'l', 'l', 'c', 'c', 'l'].concat(hari.map(() => 'c')) };
+    if (x) { EKSPOR.xlsx(o); UI.toast('Excel absensi diunduh.'); }
+    else { EKSPOR.pdf(o); UI.toast('Pilih "Simpan sebagai PDF" di jendela cetak.', 'info'); }
+  },
+
   // ===========================================================
   // LAPORAN REKAP
   // ===========================================================
   async laporan(el) {
-    el.innerHTML = Kelola.kepala('Laporan Rekap', 'Grafik & tabel peserta · unduh Excel/PDF sesuai template', '<button class="btn outline sm" data-aksi="unduh" data-f="xlsx">' + UI.ic('download', 'sm') + 'Excel</button><button class="btn primary sm" data-aksi="unduh" data-f="pdf">' + UI.ic('download', 'sm') + 'PDF</button>') + '<div data-isi></div>';
+    el.innerHTML = Kelola.kepala('Laporan Rekap', 'Grafik & tabel peserta · unduh Excel/PDF (sesuai filter)', '<button class="btn outline sm" data-aksi="unduh" data-f="xlsx">' + UI.ic('download', 'sm') + 'Excel</button><button class="btn primary sm" data-aksi="unduh" data-f="pdf">' + UI.ic('download', 'sm') + 'PDF</button>') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     UI.loading(isi, 3);
     let d, f = { id_pelatihan: '', sektor: '', bulan: '', nama: '' }, hal = 1;
@@ -957,9 +1010,10 @@ const Admin = {
       '<div class="field"><label>Sektor</label><select class="select" data-k="sektor"><option value="">Semua sektor</option>' + SEKTOR.map(s => '<option>' + s + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>Bulan</label><select class="select" data-k="bulan"><option value="">Semua periode</option>' + bulan.map(b => '<option value="' + b + '">' + UI.bulanLabel(b) + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>Nama UMKM</label><input class="input" data-k="nama" placeholder="Cari…"></div></div></div><div class="col g20 mt20" data-hasil></div>';
+    let saring = [];
     const gambar = () => {
       const q = f.nama.toLowerCase();
-      const rows = d.rekap.filter(r => (!f.id_pelatihan || r.id_pelatihan === f.id_pelatihan) && (!f.sektor || r.sektor === f.sektor) && (!f.bulan || r.bulan === f.bulan) && (!q || (r.nama_umkm + ' ' + r.nama_pemilik).toLowerCase().indexOf(q) >= 0));
+      const rows = saring = d.rekap.filter(r => (!f.id_pelatihan || r.id_pelatihan === f.id_pelatihan) && (!f.sektor || r.sektor === f.sektor) && (!f.bulan || r.bulan === f.bulan) && (!q || (r.nama_umkm + ' ' + r.nama_pemilik).toLowerCase().indexOf(q) >= 0));
       const ev = d.evaluasi.filter(e => e.n && (!f.id_pelatihan || e.id_pelatihan === f.id_pelatihan) && (!f.bulan || e.bulan === f.bulan));
       const lulus = rows.filter(r => r.lulus).length, penuh = rows.filter(r => r.hadir >= r.jumlah_hari).length;
       // Kelompokkan per program (pelatihan), urut tanggal pelaksanaan
@@ -993,7 +1047,12 @@ const Admin = {
     UI.klik(el, {
       hal: b => { hal = +b.dataset.h; gambar(); },
       unduh: async b => {
-        try { await UI.sibuk(b, async () => { const r = await API.call('laporan_export', { format: b.dataset.f, filter: f }); UI.unduhBase64(r); UI.toast('Laporan diunduh: ' + r.nama); }, 'Menyusun…'); } catch (e) { UI.gagal(e); }
+        // Template laporan khusus (Google Sheets) → disusun server; selain itu format baku langsung di browser (instan)
+        if (this.setelan().TEMPLATE_LAPORAN_ID) {
+          try { await UI.sibuk(b, async () => { const r = await API.call('laporan_export', { format: b.dataset.f, filter: f }); UI.unduhBase64(r); UI.toast('Laporan diunduh: ' + r.nama); }, 'Menyusun…'); } catch (e) { UI.gagal(e); }
+          return;
+        }
+        this.eksporLaporan(b.dataset.f, saring, f, pel);
       }
     });
     gambar();

@@ -28,15 +28,18 @@ var FBC = {
   },
 
   /** Masuk Firebase dengan custom token dari GAS. */
-  async masuk(fbToken) {
-    await this.muat();
-    await this.auth.signInWithCustomToken(fbToken);
-    return this.auth.currentUser;
+  masuk(fbToken) {
+    // disimpan agar pastikanMasuk() menunggu proses ini (tidak meminta token baru ke server = hemat antrean)
+    this._masukP = (async () => { await this.muat(); await this.auth.signInWithCustomToken(fbToken); return this.auth.currentUser; })();
+    const p = this._masukP;
+    p.catch(() => { }).then(() => { if (this._masukP === p) this._masukP = null; });
+    return p;
   },
 
   /** Pastikan sudah masuk Firebase sesuai sesi RuangLatih (pulihkan / minta token baru bila perlu). */
   async pastikanMasuk() {
     await this.muat();
+    if (this._masukP) { try { await this._masukP; } catch (e) { } }
     let u = this.auth.currentUser || await new Promise(res => { const off = this.auth.onAuthStateChanged(x => { off(); res(x); }); });
     const s = Sesi.user();
     if (u && s && u.uid !== String(s.id)) { await this.auth.signOut(); u = null; }
