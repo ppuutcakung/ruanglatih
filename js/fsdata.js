@@ -8,7 +8,7 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '3.4', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '3.5', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
@@ -16,8 +16,9 @@ var FSD = {
     'draft_list', 'umkm_list', 'umkm_riwayat', 'instruktur_list', 'eval_form', 'eval_hasil', 'log_list', 'laporan_data',
     'p_beranda', 'p_pelatihan', 'p_ruang', 'p_soal', 'p_eval_form', 'p_materi', 'p_riwayat', 'p_sertifikat', 'multi'],
   // tugas_nilai sengaja lewat server (GAS): nilai adalah data penting → tidak bergantung aturan di browser
-  TULIS: ['pelatihan_simpan', 'pelatihan_hapus', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',
-    'peserta_hapus', 'umkm_status', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan', 'tugas_hapus',
+  // pelatihan_hapus & tugas_hapus lewat server: berkas Google Drive (flyer, lampiran) ikut dihapus
+  TULIS: ['pelatihan_simpan', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',
+    'peserta_hapus', 'umkm_status', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan',
     'eval_simpan_form', 'eval_salin', 'p_absen', 'p_kirim_eval'],
   /** true bila aksi ini dijalankan di perangkat (bukan di GAS). */
   lokal(action, d) {
@@ -62,6 +63,8 @@ var FSD = {
       await Promise.all(tunggu);
       await this.perPelatihan();
       this._aktif = true;
+      // Identitas Firebase berubah (mis. akun lain masuk di tab lain) → sambung ulang dengan akun yang benar
+      if (!this._awasi) this._awasi = FBC.auth.onAuthStateChanged(a => { const s = Sesi.user(); if (this._aktif && s && (!a || a.uid !== String(s.id))) this.pulihkan(); });
       return true;
     })();
     this._siap.catch(() => { this._siap = null; });
@@ -106,7 +109,7 @@ var FSD = {
         this._src[key].ids = baru;
         lama.forEach(id => { if (!baru.has(id)) this._simpanDok(col, id, null, key); });
         if (awal) { awal = false; res(); } else this.berubah(col);
-      }, err => { console.warn('Firestore', key, err && err.code); if (awal) { awal = false; res(); } });
+      }, err => { this._galat(key, err); if (awal) { awal = false; res(); } });
       this._off.push(off);
     });
   },
@@ -117,9 +120,30 @@ var FSD = {
       const off = ref.onSnapshot(d => {
         this._simpanDok(col, ref.id, d.exists ? d.data() : null, key);
         if (awal) { awal = false; res(); } else this.berubah(col);
-      }, err => { console.warn('Firestore', key, err && err.code); if (awal) { awal = false; res(); } });
+      }, err => { this._galat(key, err); if (awal) { awal = false; res(); } });
       this._off.push(off);
     });
+  },
+
+  /** Pendengar ditolak (biasanya identitas tertukar) → pulihkan otomatis tanpa perlu reload. */
+  _galat(key, err) {
+    if (err && err.code === 'permission-denied') this.pulihkan();
+    else console.warn('Firestore', key, err && err.code);
+  },
+  pulihkan() {
+    if (this._pulih || Date.now() - (this._pulihT || 0) < 15000) return;
+    this._pulih = true; this._pulihT = Date.now();
+    setTimeout(async () => {
+      try {
+        if (!Sesi.user()) return;
+        await this.cocokkanAuth();
+        this.berhenti();
+        await this.mulai();
+        Simpan.hapusSemua();
+        if (window.App && App.segarkanDiam) App.segarkanDiam();
+      } catch (e) { console.warn('Pemulihan sinkron gagal', e && e.message); }
+      finally { this._pulih = false; }
+    }, 400);
   },
 
   /** Data berubah (oleh pengguna lain / perangkat lain / diri sendiri) → segarkan tampilan hidup. */

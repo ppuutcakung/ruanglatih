@@ -16,6 +16,7 @@ var FBC = {
       const b = 'https://www.gstatic.com/firebasejs/' + this.VER + '/';
       await UI.muatSkrip(b + 'firebase-app-compat.js');
       await Promise.all([UI.muatSkrip(b + 'firebase-auth-compat.js'), UI.muatSkrip(b + 'firebase-firestore-compat.js')]);
+      try { firebase.firestore.setLogLevel('error'); } catch (e) { } // sembunyikan peringatan informasi SDK (bukan error)
       if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
       this.auth = firebase.auth();
       this.db = firebase.firestore();

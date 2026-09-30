@@ -427,6 +427,14 @@ var App = {
   },
 
   mulai() {
+    // Akun berganti / keluar di tab lain pada browser yang sama → tab ini ikut menyesuaikan
+    window.addEventListener('storage', e => {
+      if (e.key !== 'rl_sesi_v1') return;
+      let a = null, b = null;
+      try { a = JSON.parse(e.oldValue || 'null'); b = JSON.parse(e.newValue || 'null'); } catch (x) { }
+      const ida = a && a.user ? a.user.peran + ':' + a.user.id : '', idb = b && b.user ? b.user.peran + ':' + b.user.id : '';
+      if (ida !== idb) { UI.toast(idb ? 'Akun berganti di tab lain — memuat ulang…' : 'Anda keluar di tab lain.', 'info'); setTimeout(() => location.reload(), 900); }
+    });
     ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { this._sentuh = Date.now(); }, true));
     this.muatBrand();
     window.addEventListener('hashchange', () => {

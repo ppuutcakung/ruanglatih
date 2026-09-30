@@ -506,6 +506,20 @@ function catatLog(sesi, aksi) {
 }
 
 function folder(id) { return DriveApp.getFolderById(id); }
+/**
+ * Hapus berkas Google Drive secara PERMANEN (tidak menumpuk di Sampah → hemat penyimpanan).
+ * Bila gagal (mis. izin), berkas dipindah ke Sampah (terhapus otomatis setelah 30 hari).
+ */
+function hapusBerkas(id) {
+  if (!id) return;
+  try {
+    const r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?supportsAllDrives=true',
+      { method: 'delete', headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    const c = r.getResponseCode();
+    if (c === 204 || c === 200 || c === 404) return;
+  } catch (e) { }
+  try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { }
+}
 function subFolder(parentId, nama) {
   const p = folder(parentId);
   const it = p.getFoldersByName(nama);
@@ -1035,7 +1049,7 @@ function aksiMateriHapus(d, s) {
     const m = DB.find('Materi', x => x.id_materi === d.id_materi);
     if (!m) throw new Error('Materi tidak ditemukan.');
     cekAkses(s, m.id_pelatihan);
-    try { DriveApp.getFileById(m.id_file).setTrashed(true); } catch (e) { }
+    hapusBerkas(m.id_file);
     DB.remove('Materi', [m]);
     cacheDel(['materi_semua']);
     catatLog(s, 'Menghapus materi "' + m.judul + '"');
@@ -1248,7 +1262,7 @@ function aksiTugasHapus(d, s) {
     if (!r) throw new Error('Tugas tidak ditemukan.');
     cekAkses(s, r.id_pelatihan);
     if (DB.find('Pengumpulan_Tugas', k => k.id_tugas === r.id_tugas)) throw new Error('Tugas sudah punya kiriman peserta, tidak bisa dihapus.');
-    if (r.id_lampiran) try { DriveApp.getFileById(r.id_lampiran).setTrashed(true); } catch (e) { }
+    hapusBerkas(r.id_lampiran);
     DB.remove('Tugas', [r]);
     return { message: 'Tugas dihapus.' };
   });
@@ -1275,7 +1289,7 @@ function aksiTugasLampiran(d, s) {
   const t = DB.find('Tugas', x => x.id_tugas === d.id_tugas);
   if (!t) throw new Error('Tugas tidak ditemukan. Simpan tugas terlebih dahulu.');
   cekAkses(s, t.id_pelatihan);
-  const buang = id => { if (id) try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { } };
+  const buang = id => hapusBerkas(id);
   if (d.hapus) {
     buang(t.id_lampiran);
     DB.update('Tugas', t, { id_lampiran: '', nama_lampiran: '', tipe_lampiran: '' });
@@ -1611,7 +1625,13 @@ function aksiPelatihanHapus(d, s) {
       throw new Error('Pelatihan sudah memiliki peserta atau materi, tidak bisa dihapus. Ubah statusnya menjadi selesai.');
     DB.remove('Evaluasi_Pertanyaan', DB.filter('Evaluasi_Pertanyaan', x => x.id_pelatihan === id));
     DB.remove('Bank_Soal', DB.filter('Bank_Soal', x => x.id_pelatihan === id));
-    DB.remove('Tugas', DB.filter('Tugas', x => x.id_pelatihan === id));
+    const tugas = DB.filter('Tugas', x => x.id_pelatihan === id);
+    tugas.forEach(t => hapusBerkas(t.id_lampiran)); // lampiran tugas ikut dihapus dari Drive
+    DB.remove('Tugas', tugas);
+    hapusBerkas(r.id_flyer);                         // flyer ikut dihapus
+    ['FOLDER_TUGAS', 'FOLDER_SERTIFIKAT'].forEach(k => { // folder kosong milik pelatihan ini
+      try { const it = folder(CONFIG[k]).getFoldersByName(id); while (it.hasNext()) hapusBerkas(it.next().getId()); } catch (e) { }
+    });
     DB.remove('Pelatihan', [DB.find('Pelatihan', x => x.id_pelatihan === id)]);
     catatLog(s, 'Menghapus pelatihan "' + r.judul + '"');
     return { message: 'Pelatihan dihapus.' };
@@ -1628,7 +1648,7 @@ function aksiPelatihanFlyer(d, s) {
   bagikanPublik(file);
   return denganKunci(() => {
     const r = DB.find('Pelatihan', x => x.id_pelatihan === d.id_pelatihan);
-    if (r.id_flyer) { try { DriveApp.getFileById(r.id_flyer).setTrashed(true); } catch (e) { } }
+    if (r.id_flyer) hapusBerkas(r.id_flyer);
     DB.update('Pelatihan', r, { id_flyer: file.getId() });
     cacheDel(['flyer_semua']);
     catatLog(s, 'Mengunggah flyer "' + p.judul + '"');
@@ -2127,7 +2147,7 @@ function aksiPKumpulTugas(d, s) {
 
   return denganKunci(() => {
     const cek = DB.find('Pengumpulan_Tugas', x => x.id_tugas === t.id_tugas && x.id_umkm === s.id);
-    if (cek) { file.setTrashed(true); throw new Error('Anda sudah mengirim berkas untuk tugas ini. Hapus kiriman lama terlebih dahulu.'); }
+    if (cek) { hapusBerkas(file.getId()); throw new Error('Anda sudah mengirim berkas untuk tugas ini. Hapus kiriman lama terlebih dahulu.'); }
     const data = { id_file: file.getId(), nama_file: f.nama || namaFile, tipe_file: tipe, waktu_kumpul: now(), skor: '', catatan_instruktur: '', dinilai_oleh: '', waktu_dinilai: '' };
     DB.insert('Pengumpulan_Tugas', Object.assign({ id_tugas: t.id_tugas, id_umkm: s.id }, data));
     catatLog(s, (s.u || s.id) + ' mengunggah berkas tugas "' + t.judul + '"');
@@ -2293,7 +2313,7 @@ function aksiPHapusTugas(d, s) {
     if (k.skor !== '') throw new Error('Tugas sudah dinilai, kiriman tidak bisa dihapus.');
     if (t.batas_waktu && now() > t.batas_waktu) throw new Error('Batas waktu pengumpulan sudah lewat, kiriman tidak bisa dihapus.');
     if (!aktivitasBuka(p, 'tugas')) throw new Error('Pengumpulan tugas sudah ditutup, kiriman tidak bisa dihapus.');
-    try { DriveApp.getFileById(k.id_file).setTrashed(true); } catch (e) { }
+    hapusBerkas(k.id_file);
     DB.remove('Pengumpulan_Tugas', [k]);
     catatLog(s, (s.u || s.id) + ' menghapus kiriman tugas "' + t.judul + '"');
     return { message: 'Kiriman dihapus. Silakan unggah berkas yang benar.' };
@@ -2543,9 +2563,8 @@ function aksiLaporanExport(d, s) {
       if (!blob) throw new Error('Gagal membuat file Excel. Coba beberapa saat lagi.');
     }
     blob.setName(namaFile + '.' + format);
-    try { exportsDir.createFile(blob); } catch (e) { }
   } finally {
-    if (ss) try { DriveApp.getFileById(ss.getId()).setTrashed(true); } catch (e) { }
+    if (ss) hapusBerkas(ss.getId());
   }
   catatLog(s, 'Mengunduh rekap ' + format.toUpperCase() + ' (' + rows.length + ' baris)');
   return { nama: namaFile + '.' + format, tipe: format === 'pdf' ? 'application/pdf' : blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
@@ -2652,7 +2671,7 @@ function aksiAbsensiExport(d, s) {
     lebar.forEach((w, i) => sh.setColumnWidth(i + 1, w));
     blob = pdfDariSheet(ss.getId(), sh.getSheetId(), false);
   } catch (e) { blob = null; }
-  finally { if (ss) try { DriveApp.getFileById(ss.getId()).setTrashed(true); } catch (e) { } }
+  finally { if (ss) hapusBerkas(ss.getId()); }
 
   // Cadangan: HTML → PDF
   if (!blob) blob = pdfDariHtml(kopHtml(judul, lembaga, info) + tabelHtml(header, data.map(r => r.map(String)), 9) + '<p style="font-size:9.5pt;font-weight:bold;margin-top:10px">Rekap kehadiran — ' + escH(rekap) + '</p>');
@@ -2724,7 +2743,7 @@ function aksiSertTemplate(d, s) {
     });
     if (res.getResponseCode() !== 200) throw new Error('Gagal mengubah PPTX menjadi Google Slides (' + res.getResponseCode() + ').');
     id = JSON.parse(res.getContentText()).id;
-    pptx.setTrashed(true);
+    hapusBerkas(pptx.getId());
   } else if (d.link) {
     id = idDariLink(d.link);
     if (!id) throw new Error('Link Google Slides tidak valid.');
@@ -2770,7 +2789,7 @@ function buatPdfSertifikat(tplId, data, namaFile) {
     pres.saveAndClose();
     return copy.getAs('application/pdf').setName(namaFile + '.pdf');
   } finally {
-    copy.setTrashed(true);
+    hapusBerkas(copy.getId());
   }
 }
 function nomorSertifikat(p, urut) {
@@ -2808,7 +2827,7 @@ function aksiSertTerbitkan(d, s) {
 
   if (d.ulang) {
     denganKunci(() => DB.filter('Peserta_Pelatihan', x => x.id_pelatihan === p.id_pelatihan && x.id_file_sertifikat).forEach(r => {
-      try { DriveApp.getFileById(r.id_file_sertifikat).setTrashed(true); } catch (e) { }
+      hapusBerkas(r.id_file_sertifikat);
       DB.update('Peserta_Pelatihan', r, { id_file_sertifikat: '' });
     }));
   }
@@ -3027,7 +3046,7 @@ var CERMIN = {
           else set('admin', r.username, { username: r.username, nama: r.nama, password_hash: r.password_hash });
           break;
         case 'Pelatihan': {
-          if (op.jenis === 'remove') { hapus('pelatihan', r.id_pelatihan); break; }
+          if (op.jenis === 'remove') { hapus('pelatihan', r.id_pelatihan); hapus('pelatihan_rahasia', r.id_pelatihan); hapus('kunci_soal', r.id_pelatihan); break; }
           set('pelatihan', r.id_pelatihan, docPelatihan(r));
           if (op.jenis === 'update' && (kunci.indexOf('id_instruktur') >= 0 || kunci.indexOf('tanggal_mulai') >= 0))
             regPel(r.id_pelatihan).forEach(x => ubah('pendaftaran', x._id, [[['id_instruktur'], r.id_instruktur], [['tahun'], String(r.tanggal_mulai).slice(0, 4)]]));
@@ -3111,9 +3130,11 @@ var CERMIN = {
       }
     });
     // Form evaluasi disimpan utuh per pelatihan (1 dokumen berisi daftar pertanyaan)
-    Object.keys(evalForm).forEach(id => set('evaluasi_form', id, {
-      id_pelatihan: id, pertanyaan: (saatIni('Evaluasi_Pertanyaan') || []).filter(q => q.id_pelatihan === id).map(q => ({ bagian: q.bagian, nomor: n(q.nomor), pertanyaan: q.pertanyaan, tipe: q.tipe }))
-    }));
+    Object.keys(evalForm).forEach(id => {
+      const q = (saatIni('Evaluasi_Pertanyaan') || []).filter(x => x.id_pelatihan === id);
+      if (!q.length && id !== 'DEFAULT') hapus('evaluasi_form', id); // form kosong (pelatihan dihapus) → dokumen ikut dihapus
+      else set('evaluasi_form', id, { id_pelatihan: id, pertanyaan: q.map(x => ({ bagian: x.bagian, nomor: n(x.nomor), pertanyaan: x.pertanyaan, tipe: x.tipe })) });
+    });
     return W;
   },
 

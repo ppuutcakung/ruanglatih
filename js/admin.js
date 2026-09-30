@@ -950,13 +950,24 @@ const Admin = {
       if (!idPel) { isi.innerHTML = Kelola.tanpaPelatihan(); return; }
       UI.loading(isi, 3);
       const idA = idPel;
-      try { await API.ambil('sert_status', { id_pelatihan: idA }, x => { if (idA === idPel && !isi._terbit) { d = x; gambar(); } }, { el: isi }); } catch (e) { UI.galat(isi, e, muat); }
+      // ⚡ Mode Firebase: status peserta langsung dari data lokal (instan); info template (Google Drive) menyusul dari server
+      if (API.modeFB() && !Simpan.get(Simpan.kunci('sert_status', { id_pelatihan: idA }))) {
+        try {
+          const det = await API.call('pelatihan_detail', { id_pelatihan: idA });
+          if (idA === idPel && !d) {
+            const ps = det.peserta.map(x => ({ id_umkm: x.id_umkm, nama_umkm: x.nama_umkm, nama_pemilik: x.nama_pemilik, lulus: x.lulus, kurang: x.kurang || [], no_sertifikat: x.no_sertifikat, terbit: !!x.sertifikat_terbit }));
+            d = { template: undefined, ringkas: { total: ps.length, lulus: ps.filter(x => x.lulus).length, terbit: ps.filter(x => x.terbit).length }, peserta: ps };
+            gambar();
+          }
+        } catch (e) { }
+      }
+      try { await API.ambil('sert_status', { id_pelatihan: idA }, x => { if (idA === idPel && !isi._terbit) { d = x; gambar(); } }, { el: isi }); } catch (e) { if (!d) UI.galat(isi, e, muat); else UI.gagal(e); }
     };
     const gambar = () => {
       const t = d.template, r = d.ringkas;
       isi.innerHTML = '<div class="grid g3"><div class="card stat"><span class="l">Peserta</span><span class="v">' + r.total + '</span></div><div class="card stat"><span class="l">Memenuhi syarat lulus</span><span class="v c-ok">' + r.lulus + '</span></div><div class="card stat"><span class="l">Sertifikat terbit</span><span class="v c-primary">' + r.terbit + ' <span class="t-sm muted">/ ' + r.lulus + '</span></span></div></div>' +
         '<div class="grid g2 mt20" style="align-items:start"><div class="card"><div class="card-h"><div class="h-sm">Template Sertifikat</div>' + (t ? '<span class="chip ' + (t.sumber === 'khusus' ? 'solid' : 'info') + ' sm">' + (t.sumber === 'khusus' ? 'Khusus pelatihan ini' : 'Template bawaan') + '</span>' : '') + '</div>' +
-        (t ? '<div class="item"><div class="ic-tile">' + UI.ic('award') + '</div><div class="grow"><div class="semi clamp1">' + esc(t.nama) + '</div><div class="t-xs muted">Google Slides · 1 halaman</div></div>' + (t.url ? '<a class="btn sm outline" href="' + esc(t.url) + '" target="_blank" rel="noopener">Buka</a>' : '') + '</div>' + (t.rusak ? '<div class="err mt8">Template tidak dapat dibuka. Unggah ulang.</div>' : '')
+        (t === undefined ? '<div class="card well tight t-sm row">' + '<span class="spin" style="width:14px;height:14px"></span> Memuat info template dari Google Drive…</div>' : t ? '<div class="item"><div class="ic-tile">' + UI.ic('award') + '</div><div class="grow"><div class="semi clamp1">' + esc(t.nama) + '</div><div class="t-xs muted">Google Slides · 1 halaman</div></div>' + (t.url ? '<a class="btn sm outline" href="' + esc(t.url) + '" target="_blank" rel="noopener">Buka</a>' : '') + '</div>' + (t.rusak ? '<div class="err mt8">Template tidak dapat dibuka. Unggah ulang.</div>' : '')
           : '<div class="card well tight t-sm">Belum ada template. Unggah PPTX atau tempel link Google Slides (1 halaman).</div>') +
         '<div class="t-xs muted mt12">Penanda yang diganti otomatis: {{nama_umkm}} {{nama_pemilik}} {{judul_pelatihan}} {{tanggal_pelatihan}} {{no_sertifikat}}</div>' +
         '<div class="row wrap g8 mt12"><button class="btn secondary sm" data-aksi="pptx" data-khusus="1">' + UI.ic('upload', 'sm') + 'Unggah PPTX (khusus)</button><button class="btn outline sm" data-aksi="link" data-khusus="1">' + UI.ic('link', 'sm') + 'Link Slides (khusus)</button>' +
@@ -1008,7 +1019,7 @@ const Admin = {
       terbit: b => terbitkan(b, false),
       ulang: async b => { if (await UI.konfirmasi('Hapus semua PDF sertifikat pelatihan ini lalu buat ulang? Nomor sertifikat tetap sama.', { ok: 'Terbitkan ulang', bahaya: true })) terbitkan(b, true); }
     });
-    try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); }); } catch (e) { UI.galat(isi, e, () => this.sertifikat(el)); }
+    try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; d = null; muat(); }); } catch (e) { UI.galat(isi, e, () => this.sertifikat(el)); }
   },
 
   // ===========================================================
@@ -1264,8 +1275,15 @@ const Admin = {
     el.innerHTML = Kelola.kepala('Pengaturan', 'Identitas aplikasi, laporan & sertifikat, dan sistem') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     UI.loading(isi, 2);
-    let s;
-    try { s = await API.cepat('pengaturan_get'); } catch (e) { return UI.galat(isi, e, () => this.pengaturan(el)); }
+    let s, lokal = false;
+    const ck = Simpan.get(Simpan.kunci('pengaturan_get', {}));
+    if (ck) { s = ck.d; if (Date.now() - ck.t > 60000) API.call('pengaturan_get').catch(() => { }); }
+    else if (API.modeFB()) {
+      // ⚡ Identitas & pengaturan dari data lokal (instan); info Drive/jadwal menyusul dari server
+      try { await FSD.mulai(); s = Object.assign({}, FSD.kol('pengaturan').find(x => x._id === 'umum') || {}); lokal = true; } catch (e) { }
+    }
+    if (!s) { try { s = await API.call('pengaturan_get'); } catch (e) { return UI.galat(isi, e, () => this.pengaturan(el)); } }
+    if (lokal) API.call('pengaturan_get').then(() => { if (el.isConnected && !isi._diubah) this.pengaturan(el); }).catch(() => { });
     const B = { nama: s.NAMA_APLIKASI || 'RuangLatih', tagline: s.TAGLINE || 'Pusat Pendampingan UMKM Cakung', footer: s.TEKS_FOOTER || APP_CONFIG.footer || '',
       logo: s.LOGO_DATA || '', warna: s.WARNA_UTAMA || '#9E3D52', wa: s.WA_ADMIN || APP_CONFIG.waAdmin || '' };
     const waLokal = w => { w = String(w || '').replace(/\D/g, ''); return w.indexOf('62') === 0 ? '0' + w.slice(2) : w; };
@@ -1295,13 +1313,14 @@ const Admin = {
       '<div><div class="lbl" style="margin-bottom:6px">Syarat lulus bawaan (untuk pelatihan baru)</div>' + SYARAT.map(x => '<label class="check"><input type="checkbox" name="sy_' + x[0] + '"' + (sy[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div>' +
       '<div><button class="btn primary" data-aksi="simpan">Simpan Pengaturan</button></div></div>' +
       '<div class="col g20"><div class="card"><div class="h-sm">Penyimpanan Google</div><div class="list mt12">' +
-      [['Folder utama Drive', s.folder, 'layers'], ['Folder template sertifikat', s.folder_template, 'award'], ['Spreadsheet database', s.spreadsheet, 'chart']].map(x => '<a class="item" href="' + esc(x[1]) + '" target="_blank" rel="noopener"><div class="ic-tile sm">' + UI.ic(x[2], 'sm') + '</div><div class="grow semi">' + x[0] + '</div>' + UI.ic('chevR', 'sm') + '</a>').join('') + '</div></div>' +
-      '<div class="card"><div class="h-sm">Database</div><div class="mt8">' + (s.sumber_data === 'firebase' ? '<span class="chip ok dot sm">Firebase (Firestore)</span><div class="t-sm muted mt8">Spreadsheet = cadangan otomatis tiap malam' + (s.cadangan_terakhir ? ' · terakhir ' + esc(UI.waktu(s.cadangan_terakhir)) : '') + '.</div>' : '<span class="chip line sm">Spreadsheet</span>') + '</div>' +
+      [['Folder utama Drive', s.folder, 'layers'], ['Folder template sertifikat', s.folder_template, 'award'], ['Spreadsheet database', s.spreadsheet, 'chart']].filter(x => x[1]).map(x => '<a class="item" href="' + esc(x[1]) + '" target="_blank" rel="noopener"><div class="ic-tile sm">' + UI.ic(x[2], 'sm') + '</div><div class="grow semi">' + x[0] + '</div>' + UI.ic('chevR', 'sm') + '</a>').join('') + '</div></div>' +
+      '<div class="card"><div class="h-sm">Database</div><div class="mt8">' + (s.sumber_data === undefined ? '<span class="chip line sm">Memuat…</span>' : s.sumber_data === 'firebase' ? '<span class="chip ok dot sm">Firebase (Firestore)</span><div class="t-sm muted mt8">Spreadsheet = cadangan otomatis tiap malam' + (s.cadangan_terakhir ? ' · terakhir ' + esc(UI.waktu(s.cadangan_terakhir)) : '') + '.</div>' : '<span class="chip line sm">Spreadsheet</span>') + '</div>' +
       '<div class="t-sm muted mt8">' + (FBC.aktif() ? 'Konfigurasi Firebase terpasang.' : 'FIREBASE_CONFIG belum diisi di js/config.js.') + '</div>' +
       (FBC.aktif() ? '<a class="btn secondary sm mt12" href="#/uji-firebase">' + UI.ic('shield', 'sm') + 'Buka Uji Firebase</a>' : '') + '</div>' +
-      '<div class="card"><div class="h-sm">Pembersihan Log Otomatis</div><div class="mt8">' + (s.log_otomatis ? '<span class="chip ok dot sm">Aktif — setiap akhir bulan</span>' : '<span class="chip warn sm">Belum aktif</span><div class="t-sm muted mt8">Jalankan fungsi <b>pasangJadwalLog</b> sekali dari editor Apps Script.</div>') + '</div></div>' +
+      '<div class="card"><div class="h-sm">Pembersihan Log Otomatis</div><div class="mt8">' + (s.log_otomatis === undefined ? '<span class="chip line sm">Memuat…</span>' : s.log_otomatis ? '<span class="chip ok dot sm">Aktif — setiap akhir bulan</span>' : '<span class="chip warn sm">Belum aktif</span><div class="t-sm muted mt8">Jalankan fungsi <b>pasangJadwalLog</b> sekali dari editor Apps Script.</div>') + '</div></div>' +
       '<div class="card"><div class="h-sm">Koneksi API</div><div class="t-sm muted mt8" style="word-break:break-all">' + esc(GAS_URL) + '</div><div class="mt12" data-sehat><span class="chip line sm">Memeriksa…</span></div></div></div></div>';
     if (window.innerWidth < 1000) $('[data-dua]', isi).style.gridTemplateColumns = '1fr';
+    isi.addEventListener('input', () => { isi._diubah = true; });
 
     const nilai = () => ({ nama: $('#p_nama').value.trim(), tagline: $('#p_tag').value.trim(), footer: $('#p_foot').value.trim(), warna: $('#p_hex').value.trim(), wa: $('#p_wa').value.trim(), logo: logo });
     const pratinjau = () => {
