@@ -318,6 +318,36 @@ const UI = {
       return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
     } catch (e) { return file; }
   },
+  /**
+   * Siapkan berkas unggahan tugas/lampiran: PDF apa adanya; foto apa pun (termasuk WebP/HEIC bila
+   * browser bisa membukanya) diubah ke JPEG & diperkecil. Hasil: File PDF/JPG/PNG ≤ maksMB.
+   */
+  async siapkanBerkas(file, maksMB) {
+    maksMB = maksMB || 10;
+    const pdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
+    if (!pdf && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) throw new Error('Berkas harus berupa foto (JPG/PNG) atau PDF.');
+    let hasil = file;
+    if (pdf) { if (file.type !== 'application/pdf') hasil = new File([file], file.name, { type: 'application/pdf' }); }
+    else if (/^image\/(jpeg|png)$/.test(file.type)) hasil = await UI.kompres(file);
+    else hasil = await UI.keJpeg(file);
+    if (hasil.size > maksMB * 1048576) throw new Error('Ukuran berkas maksimal ' + maksMB + ' MB.');
+    return hasil;
+  },
+  /** Ubah gambar format lain (WebP, HEIC di iPhone/Safari, GIF, BMP) menjadi JPEG. */
+  async keJpeg(file, maks) {
+    maks = maks || 1600;
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const s = Math.min(1, maks / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.86));
+      return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    } catch (e) {
+      throw new Error('Format foto ini belum bisa dibuka. Gunakan JPG/PNG — di iPhone: Pengaturan › Kamera › Format › "Paling Kompatibel".');
+    } finally { URL.revokeObjectURL(url); }
+  },
   base64KeBlob(o) {
     const bin = atob(o.data), n = bin.length, u = new Uint8Array(n);
     for (let i = 0; i < n; i++) u[i] = bin.charCodeAt(i);

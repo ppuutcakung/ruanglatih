@@ -29,7 +29,7 @@ const BACA = {
   p_riwayat: '*', p_sertifikat: '*'
 };
 const TULIS = {
-  materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
+  materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_lampiran: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
   umkm_simpan: 'umkm', umkm_reset_pin: 'umkm', umkm_status: 'umkm', umkm_import: 'umkm', instruktur_simpan: 'ins',
   pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
@@ -38,7 +38,7 @@ const TULIS = {
 };
 
 // Aksi yang memang bisa lama di server (PDF, unggah, sertifikat) → batas waktu lebih longgar
-const LAMA = { sert_terbitkan: 1, sert_template: 1, sert_preview: 1, laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1 };
+const LAMA = { sert_terbitkan: 1, sert_template: 1, sert_preview: 1, laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1, tugas_lampiran: 1, tugas_lampiran_lihat: 1 };
 
 /** Penyimpanan cache: memori (instan) + localStorage (bertahan saat aplikasi dibuka ulang). */
 const Simpan = {

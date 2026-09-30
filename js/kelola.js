@@ -415,7 +415,8 @@ const Kelola = {
         (tampil.length ? '<div class="list">' + tampil.map(k => this.itemKumpul(k, bolehNilai)).join('') + '</div>' : UI.kosong(tab === 'menunggu' ? 'Tidak ada tugas yang menunggu penilaian.' : 'Belum ada tugas yang dinilai.', 'checkSquare')) + '</div>' +
         '<div class="card"><div class="card-h"><div class="h-sm">Daftar Tugas</div></div>' +
         (data.tugas.length ? '<div class="list">' + data.tugas.map(t => '<div class="item" style="align-items:flex-start"><div class="ic-tile sm">' + UI.ic('clipboard', 'sm') + '</div><div class="grow"><div class="semi">' + esc(t.judul) + '</div>' +
-          '<div class="t-sm muted clamp2">' + esc(t.instruksi) + '</div><div class="meta mt8">' + (idPel ? '' : '<span>' + esc(t.pelatihan) + '</span>') + '<span>' + UI.ic('clock', 'sm') + (t.batas_waktu ? 'Batas ' + UI.waktu(t.batas_waktu) : 'Tanpa batas waktu') + '</span><span>' + t.jumlah_kumpul + ' terkumpul</span></div></div>' +
+          '<div class="t-sm muted clamp2">' + esc(t.instruksi) + '</div>' +
+          (t.nama_lampiran ? '<button class="chip line sm mt8" data-aksi="lampiranT" data-id="' + esc(t.id_tugas) + '"' + (t._unggah ? ' disabled' : '') + '>' + UI.ic(/pdf/.test(t.tipe_lampiran || t.nama_lampiran) ? 'file' : 'image', 'sm') + esc(t.nama_lampiran) + (t._unggah ? ' · mengunggah…' : '') + '</button>' : '') + '<div class="meta mt8">' + (idPel ? '' : '<span>' + esc(t.pelatihan) + '</span>') + '<span>' + UI.ic('clock', 'sm') + (t.batas_waktu ? 'Batas ' + UI.waktu(t.batas_waktu) : 'Tanpa batas waktu') + '</span><span>' + t.jumlah_kumpul + ' terkumpul</span></div></div>' +
           '<div class="row g4"><button class="btn icon sm secondary" data-aksi="ubahT" data-id="' + t.id_tugas + '" title="Ubah">' + UI.ic('edit', 'sm') + '</button><button class="btn icon sm danger" data-aksi="hapusT" data-id="' + t.id_tugas + '" title="Hapus">' + UI.ic('trash', 'sm') + '</button></div></div>').join('') + '</div>'
           : UI.kosong('Belum ada tugas.', 'clipboard')) + '</div></div>';
     };
@@ -426,31 +427,58 @@ const Kelola = {
     };
     const editor = t => {
       t = t || {};
+      let lamp = {}; // { file } lampiran baru, { hapus: true } hapus lampiran lama
+      const labelLamp = () => lamp.file ? UI.ic('file', 'sm') + ' ' + esc(lamp.file.name) + ' <span class="faint">(' + UI.ukuran(lamp.file.size) + ', baru)</span>'
+        : (t.nama_lampiran && !lamp.hapus ? UI.ic('file', 'sm') + ' ' + esc(t.nama_lampiran) : '<span class="faint">Belum ada lampiran</span>');
       UI.form({
         title: t.id_tugas ? 'Ubah Tugas' : 'Buat Tugas', submit: 'Simpan Tugas',
         fields: [
           { name: 'judul', label: 'Judul tugas', value: t.judul, full: true, placeholder: 'mis. Foto katalog 3 produk unggulan' },
           { name: 'instruksi', label: 'Instruksi', type: 'textarea', value: t.instruksi, placeholder: 'Jelaskan apa yang harus dikumpulkan peserta (JPG/PNG/PDF, maks 10 MB).' },
-          { name: 'batas_waktu', label: 'Batas waktu (opsional)', type: 'datetime-local', value: String(t.batas_waktu || '').slice(0, 16).replace(' ', 'T'), full: true }
+          { name: 'batas_waktu', label: 'Batas waktu (opsional)', type: 'datetime-local', value: String(t.batas_waktu || '').slice(0, 16).replace(' ', 'T'), full: true },
+          { name: 'lampiran', label: 'Lampiran tugas (opsional)', type: 'html', full: true,
+            html: '<div class="row wrap g8" style="align-items:center"><button type="button" class="btn secondary sm" data-pilihlamp>' + UI.ic('upload', 'sm') + 'Pilih PDF / Gambar</button>' +
+              '<span class="t-sm" data-namalamp></span><button type="button" class="btn ghost sm" data-hapuslamp hidden>' + UI.ic('x', 'sm') + 'Hapus</button></div>',
+            hint: 'Contoh format, panduan, atau contoh hasil. PDF, JPG, atau PNG · maks 10 MB · dapat dibuka peserta di Ruang Pelatihan.' }
         ],
+        onOpen: (m, form) => {
+          const nm = $('[data-namalamp]', form), hp = $('[data-hapuslamp]', form);
+          const segar = () => { nm.innerHTML = labelLamp(); hp.hidden = !(lamp.file || (t.nama_lampiran && !lamp.hapus)); };
+          segar();
+          $('[data-pilihlamp]', form).onclick = async () => {
+            const f = (await UI.pilihFile('application/pdf,image/*', false))[0];
+            if (!f) return;
+            try { lamp = { file: await UI.siapkanBerkas(f, 10) }; segar(); } catch (e) { UI.gagal(e); }
+          };
+          hp.onclick = () => { lamp = lamp.file ? {} : { hapus: true }; segar(); };
+        },
         latar: true, pesanSimpan: 'Menyimpan tugas…',
         cek: v => { if (!v.judul) throw new Error('Judul tugas wajib diisi.'); if (!v.instruksi) throw new Error('Instruksi tugas wajib diisi.'); },
         segera: v => {
-          const lama = data.tugas.slice(), baru = Object.assign({ jumlah_kumpul: 0, pelatihan: '' }, t, v, { batas_waktu: String(v.batas_waktu || '').replace('T', ' '), id_tugas: t.id_tugas || 'tmp-' + Date.now().toString(36) });
+          const lama = data.tugas.slice(), baru = Object.assign({ jumlah_kumpul: 0, pelatihan: '' }, t, v, { batas_waktu: String(v.batas_waktu || '').replace('T', ' '), id_tugas: t.id_tugas || 'tmp-' + Date.now().toString(36),
+            nama_lampiran: lamp.file ? lamp.file.name : (lamp.hapus ? '' : t.nama_lampiran || ''), _unggah: !!lamp.file });
           const i = data.tugas.findIndex(y => y.id_tugas === t.id_tugas);
           if (t.id_tugas && i >= 0) data.tugas[i] = baru; else data.tugas.push(baru);
           gambar();
           return () => { data.tugas = lama; gambar(); };
         },
         onSubmit: async v => {
-          const r = await API.call('tugas_simpan', Object.assign({ id_pelatihan: t.id_pelatihan || idPel, id_tugas: t.id_tugas }, v));
-          UI.toast(r.message);
+          const dataT = { judul: v.judul, instruksi: v.instruksi, batas_waktu: v.batas_waktu };
+          const r = await API.call('tugas_simpan', Object.assign({ id_pelatihan: t.id_pelatihan || idPel, id_tugas: t.id_tugas }, dataT));
+          const idT = r.id_tugas || t.id_tugas;
+          t.id_tugas = idT; // bila unggah lampiran gagal & form dibuka lagi, tugas tidak dibuat dua kali
+          if (lamp.file) {
+            const o = await UI.fileKeObj(lamp.file);
+            await API.call('tugas_lampiran', { id_tugas: idT, file: { nama: o.nama, tipe: o.tipe, data: o.data } }, { retry: 4 });
+          } else if (lamp.hapus) await API.call('tugas_lampiran', { id_tugas: idT, hapus: true });
+          UI.toast(lamp.file ? 'Tugas & lampiran tersimpan.' : r.message);
           const idA = idPel;
           API.call('tugas_list', idA ? { id_pelatihan: idA } : {}).then(d2 => { if (idA === idPel && isi.isConnected) { data = d2; gambar(); } }).catch(() => { });
         }
       });
     };
     const peta = {
+      lampiranT: async b => { try { await UI.sibuk(b, async () => { const f = await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }); UI.lihatBerkas(f, 'Lampiran tugas'); }); } catch (e) { UI.gagal(e); } },
       buat: () => idPel ? editor() : UI.toast('Pilih satu pelatihan terlebih dahulu.', 'info'),
       ubahT: b => editor(data.tugas.find(t => t.id_tugas === b.dataset.id)),
       hapusT: async b => {

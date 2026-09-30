@@ -2,7 +2,7 @@
    RuangLatih — mesin.js  (DIBANGUN OTOMATIS — jangan diedit manual)
    Logika backend yang sama dengan GAS, dijalankan di browser di atas
    salinan data Firestore (mode Firebase). Sumber: Kode/Pelatihan/Admin/
-   Peserta/Laporan/Cermin.gs · dibangun 2026-09-27
+   Peserta/Laporan/Cermin.gs · dibangun 2026-09-30
    ============================================================= */
 var MESIN = (function () {
 
@@ -84,7 +84,7 @@ const SKEMA = {
   Bank_Soal: ['id_soal', 'id_pelatihan', 'jenis', 'pertanyaan', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'kunci', 'urutan'],
   Hasil_Tes: ['id_pelatihan', 'id_umkm', 'jenis', 'jawaban', 'jumlah_benar', 'skor', 'waktu_selesai'],
   Absensi: ['id_pelatihan', 'id_umkm', 'hari_ke', 'tanggal', 'waktu_absen', 'metode'],
-  Tugas: ['id_tugas', 'id_pelatihan', 'judul', 'instruksi', 'batas_waktu', 'dibuat_oleh'],
+  Tugas: ['id_tugas', 'id_pelatihan', 'judul', 'instruksi', 'batas_waktu', 'dibuat_oleh', 'id_lampiran', 'nama_lampiran', 'tipe_lampiran'],
   Pengumpulan_Tugas: ['id_tugas', 'id_umkm', 'id_file', 'nama_file', 'tipe_file', 'waktu_kumpul', 'skor', 'catatan_instruktur', 'dinilai_oleh', 'waktu_dinilai'],
   Evaluasi_Pertanyaan: ['id_pelatihan', 'bagian', 'nomor', 'pertanyaan', 'tipe'],
   Evaluasi_Jawaban: ['id_pelatihan', 'id_umkm', 'jawaban', 'waktu_isi'],
@@ -191,6 +191,8 @@ function rute() {
     soal_hapus: { peran: AI, fn: aksiSoalHapus },
     tugas_list: { peran: AI, fn: aksiTugasList },
     tugas_simpan: { peran: AI, fn: aksiTugasSimpan },
+    tugas_lampiran: { peran: AI, fn: aksiTugasLampiran },
+    tugas_lampiran_lihat: { peran: SEMUA, fn: aksiTugasLampiranLihat },
     tugas_hapus: { peran: AI, fn: aksiTugasHapus },
     tugas_nilai: { peran: I, fn: aksiTugasNilai },
     tugas_file: { peran: SEMUA, fn: aksiTugasFile },
@@ -1215,7 +1217,8 @@ function aksiTugasList(d, s) {
   return {
     tugas: tugas.map(t => ({
       id_tugas: t.id_tugas, id_pelatihan: t.id_pelatihan, pelatihan: pelMap[t.id_pelatihan], judul: t.judul,
-      instruksi: t.instruksi, batas_waktu: t.batas_waktu, jumlah_kumpul: kumpul.filter(k => k.id_tugas === t.id_tugas).length
+      instruksi: t.instruksi, batas_waktu: t.batas_waktu, jumlah_kumpul: kumpul.filter(k => k.id_tugas === t.id_tugas).length,
+      nama_lampiran: t.id_lampiran ? t.nama_lampiran : '', tipe_lampiran: t.id_lampiran ? t.tipe_lampiran : ''
     })),
     pengumpulan: kumpul
   };
@@ -1230,11 +1233,12 @@ function aksiTugasSimpan(d, s) {
       const r = DB.find('Tugas', t => t.id_tugas === d.id_tugas && t.id_pelatihan === d.id_pelatihan);
       if (!r) throw new Error('Tugas tidak ditemukan.');
       DB.update('Tugas', r, { judul: judul, instruksi: instruksi, batas_waktu: batas });
-      return { message: 'Tugas diperbarui.' };
+      return { message: 'Tugas diperbarui.', id_tugas: r.id_tugas };
     }
-    DB.insert('Tugas', { id_tugas: genId('TGS'), id_pelatihan: d.id_pelatihan, judul: judul, instruksi: instruksi, batas_waktu: batas, dibuat_oleh: s.id });
+    const id = genId('TGS');
+    DB.insert('Tugas', { id_tugas: id, id_pelatihan: d.id_pelatihan, judul: judul, instruksi: instruksi, batas_waktu: batas, dibuat_oleh: s.id });
     catatLog(s, 'Membuat tugas "' + judul + '"');
-    return { message: 'Tugas dibuat.' };
+    return { message: 'Tugas dibuat.', id_tugas: id };
   });
 }
 function aksiTugasHapus(d, s) {
@@ -1243,6 +1247,7 @@ function aksiTugasHapus(d, s) {
     if (!r) throw new Error('Tugas tidak ditemukan.');
     cekAkses(s, r.id_pelatihan);
     if (DB.find('Pengumpulan_Tugas', k => k.id_tugas === r.id_tugas)) throw new Error('Tugas sudah punya kiriman peserta, tidak bisa dihapus.');
+    if (r.id_lampiran) try { DriveApp.getFileById(r.id_lampiran).setTrashed(true); } catch (e) { }
     DB.remove('Tugas', [r]);
     return { message: 'Tugas dihapus.' };
   });
@@ -1260,6 +1265,40 @@ function aksiTugasNilai(d, s) {
     catatLog(s, 'Menilai tugas "' + t.judul + '" ' + d.id_umkm + ' skor ' + skor);
     return { message: 'Nilai tersimpan.' };
   });
+}
+/**
+ * Lampiran tugas dari instruktur/admin (PDF / gambar, maks 10 MB) → Google Drive folder Tugas/<pelatihan>/Lampiran.
+ * d.hapus = true untuk menghapus lampiran.
+ */
+function aksiTugasLampiran(d, s) {
+  const t = DB.find('Tugas', x => x.id_tugas === d.id_tugas);
+  if (!t) throw new Error('Tugas tidak ditemukan. Simpan tugas terlebih dahulu.');
+  cekAkses(s, t.id_pelatihan);
+  const buang = id => { if (id) try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { } };
+  if (d.hapus) {
+    buang(t.id_lampiran);
+    DB.update('Tugas', t, { id_lampiran: '', nama_lampiran: '', tipe_lampiran: '' });
+    return { message: 'Lampiran tugas dihapus.' };
+  }
+  const f = d.file || {}, tipe = String(f.tipe || '');
+  if (!/^(image\/(jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('Lampiran harus PDF, JPG, atau PNG.');
+  const bytes = Utilities.base64Decode(f.data || '');
+  if (!bytes.length) throw new Error('File lampiran kosong.');
+  if (bytes.length > MAX_TUGAS) throw new Error('Ukuran lampiran maksimal 10 MB.');
+  const nama = String(f.nama || ('Lampiran ' + t.judul)).slice(0, 120);
+  const dir = subFolder(subFolder(CONFIG.FOLDER_TUGAS, t.id_pelatihan).getId(), 'Lampiran');
+  const file = dir.createFile(Utilities.newBlob(bytes, tipe, nama));
+  buang(t.id_lampiran);
+  DB.update('Tugas', t, { id_lampiran: file.getId(), nama_lampiran: nama, tipe_lampiran: tipe });
+  catatLog(s, 'Menambah lampiran tugas "' + t.judul + '"');
+  return { message: 'Lampiran tugas tersimpan.', nama_lampiran: nama, tipe_lampiran: tipe };
+}
+/** Buka lampiran tugas (peserta terdaftar, instruktur pengampu, admin). */
+function aksiTugasLampiranLihat(d, s) {
+  const t = DB.find('Tugas', x => x.id_tugas === d.id_tugas);
+  if (!t || !t.id_lampiran) throw new Error('Lampiran tidak ditemukan.');
+  cekAkses(s, t.id_pelatihan);
+  return fileKeBase64(t.id_lampiran);
 }
 function aksiTugasFile(d, s) {
   const t = DB.find('Tugas', x => x.id_tugas === d.id_tugas);
@@ -1977,6 +2016,7 @@ function aksiPRuang(d, s) {
     const k = kp[t.id_tugas];
     return {
       id_tugas: t.id_tugas, judul: t.judul, instruksi: t.instruksi, batas_waktu: t.batas_waktu,
+      nama_lampiran: t.id_lampiran ? t.nama_lampiran : '', tipe_lampiran: t.id_lampiran ? t.tipe_lampiran : '',
       lewat: !!(t.batas_waktu && now() > t.batas_waktu),
       kumpul: k ? { nama_file: k.nama_file, tipe_file: k.tipe_file, waktu: k.waktu_kumpul, skor: num(k.skor), catatan: k.catatan_instruktur, dinilai: k.skor !== '' } : null
     };
@@ -3016,7 +3056,8 @@ var CERMIN = {
           break;
         case 'Tugas':
           if (op.jenis === 'remove') hapus('tugas', r.id_tugas);
-          else set('tugas', r.id_tugas, { id_tugas: r.id_tugas, id_pelatihan: r.id_pelatihan, judul: r.judul, instruksi: r.instruksi, batas_waktu: r.batas_waktu, dibuat_oleh: r.dibuat_oleh });
+          else set('tugas', r.id_tugas, { id_tugas: r.id_tugas, id_pelatihan: r.id_pelatihan, judul: r.judul, instruksi: r.instruksi, batas_waktu: r.batas_waktu, dibuat_oleh: r.dibuat_oleh,
+            id_lampiran: r.id_lampiran || '', nama_lampiran: r.nama_lampiran || '', tipe_lampiran: r.tipe_lampiran || '' });
           break;
         case 'Pengumpulan_Tugas': {
           const idPel = r.id_pelatihan || idTugasPel(r.id_tugas), reg = idPel + '_' + r.id_umkm;

@@ -171,7 +171,8 @@ const Peserta = {
         }
 ,
         kumpul: b => this.kumpulTugas(d.tugas.daftar.find(x => x.id_tugas === b.dataset.id), muatUlang),
-        lihat: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_file', { id_tugas: b.dataset.id }), 'Kiriman tugas Anda')); } catch (e) { UI.gagal(e); } }
+        lihat: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_file', { id_tugas: b.dataset.id }), 'Kiriman tugas Anda')); } catch (e) { UI.gagal(e); } },
+        lampiran: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }), 'Lampiran tugas')); } catch (e) { UI.gagal(e); } }
     };
     try { await this.ambil(v, 'p_ruang', { id_pelatihan: id }, gambar); } catch (e) { UI.galat(isi, e, () => this.ruang(v, a)); }
   },
@@ -232,19 +233,21 @@ const Peserta = {
       return '<div class="card"><div class="row between top"><div class="h-sm">' + esc(x.judul) + '</div>' +
         (k ? (k.dinilai ? '<span class="chip ok">Skor ' + UI.angka(k.skor) + '</span>' : '<span class="chip warn dot sm">Menunggu nilai</span>') : (x.lewat ? '<span class="chip bad sm">Terlewat</span>' : '<span class="chip line sm">Belum kumpul</span>')) + '</div>' +
         '<div class="t-sm muted mt8" style="white-space:pre-line">' + esc(x.instruksi) + '</div>' +
+        (x.nama_lampiran ? '<button class="card well tight row mt12" data-aksi="lampiran" data-id="' + esc(x.id_tugas) + '" style="width:100%;text-align:left;cursor:pointer"><div class="ic-tile sm">' + UI.ic(/pdf/.test(x.tipe_lampiran) ? 'file' : 'image', 'sm') + '</div>' +
+          '<div class="grow"><div class="semi t-sm clamp1">' + esc(x.nama_lampiran) + '</div><div class="t-xs muted">Lampiran dari instruktur · ketuk untuk membuka</div></div>' + UI.ic('eye', 'sm') + '</button>' : '') +
         (x.batas_waktu ? '<div class="t-xs mt8 row g4 ' + (x.lewat ? 'c-bad' : 'c-warn') + '">' + UI.ic('clock', 'sm') + 'Batas: ' + UI.waktu(x.batas_waktu) + '</div>' : '') +
         (k ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(/pdf/.test(k.tipe_file) ? 'file' : 'image', 'sm') + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(k.nama_file) + '</div><div class="t-xs muted">Dikirim ' + UI.waktu(k.waktu) + '</div></div>' +
           '<button class="btn xs outline" data-aksi="lihat" data-id="' + esc(x.id_tugas) + '">Lihat</button></div>' + (k.catatan ? '<div class="t-sm mt8"><b>Catatan instruktur:</b> ' + esc(k.catatan) + '</div>' : '') + '</div>' : '') +
-        (boleh ? '<button class="btn ' + (k ? 'secondary' : 'primary') + ' block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + (k ? 'Ganti Berkas' : 'Unggah Tugas') + '</button><div class="hint center mt8">JPG, PNG, atau PDF · maksimal 10 MB</div>' : '') + '</div>';
+        (boleh ? '<button class="btn ' + (k ? 'secondary' : 'primary') + ' block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + (k ? 'Ganti Berkas' : 'Unggah Tugas') + '</button><div class="hint center mt8">Foto (kamera / galeri) atau PDF · maksimal 10 MB</div>' : '') + '</div>';
     }).join('');
   },
 
   async kumpulTugas(t, sesudah) {
-    const f = (await UI.pilihFile('image/jpeg,image/png,application/pdf', false))[0];
+    // Foto (kamera/galeri, termasuk format WebP/HEIC bila bisa dibuka) atau PDF
+    const f = (await UI.pilihFile('image/*,application/pdf', false))[0];
     if (!f) return;
-    if (!/^(image\/(jpeg|png)|application\/pdf)$/.test(f.type)) return UI.toast('File harus JPG, PNG, atau PDF.', 'bad');
-    const file = await UI.kompres(f);
-    if (file.size > 10 * 1048576) return UI.toast('Ukuran file maksimal 10 MB.', 'bad');
+    let file;
+    try { file = await UI.siapkanBerkas(f, 10); } catch (e) { return UI.toast(e.message, 'bad'); }
     const pratinjau = /^image/.test(file.type) ? '<img src="' + URL.createObjectURL(file) + '" alt="" style="width:100%;max-height:44vh;object-fit:contain;border-radius:12px;background:var(--blush-1)">' : '<div class="empty"><div class="ic-tile">' + UI.ic('file', 'lg') + '</div></div>';
     const opts = {
       title: 'Kirim Tugas',

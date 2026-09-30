@@ -101,10 +101,10 @@ const Admin = {
     const sk = { Kuliner: 'KUL', Kerajinan: 'KRJ', Pertanian: 'PTN', Manufaktur: 'MFG' };
     const kartu = (l, chip, v, ket, kls) => '<div class="card col" style="gap:8px"><div class="row between top"><span class="l semi t-sm muted" style="max-width:150px">' + l + '</span>' + chip + '</div><div class="stat"><span class="v big ' + (kls || '') + '">' + v + '</span></div><div class="t-xs muted">' + ket + '</div></div>';
     const stats = '<div class="grid g4">' +
-      kartu('Akumulasi Peserta ' + th, R.peserta_baru ? '<span class="chip sm">+' + R.peserta_baru + ' bulan ini</span>' : '<span class="chip line sm">' + R.umkm_unik + ' UMKM</span>', R.peserta, '<div class="row g4 wrap">' + SEKTOR.map(s => '<span class="chip line sm">' + sk[s] + ' ' + (R.per_sektor[s] || 0) + '</span>').join('') + '</div>') +
-      kartu('Pelatihan & Kelulusan ' + th, '<span class="chip ok sm">' + R.lulus + ' lulus</span>', R.pelatihan, 'program · ' + R.lulus + ' dari ' + R.peserta + ' peserta lulus (' + (R.peserta ? Math.round(R.lulus / R.peserta * 100) : 0) + '%)') +
-      kartu('Rata-rata Kehadiran ' + th, L && d.ytd && R.kehadiran_live !== null ? '<span class="chip ok sm">Live ' + UI.angka(R.kehadiran_live) + '%</span>' : '', R.kehadiran === null ? '–' : UI.angka(R.kehadiran) + '%', R.hadir_total + ' dari ' + R.hari_total + ' hari-peserta hadir', 'c-primary') +
-      kartu('Tugas & Materi ' + th, R.tugas_menunggu ? '<span class="chip warn sm">' + R.tugas_menunggu + ' perlu cek</span>' : '<span class="chip ok sm">Beres</span>', R.tugas_masuk, 'berkas tugas masuk · ' + R.materi + ' modul PDF') + '</div>';
+      kartu('Akumulasi Peserta', R.peserta_baru ? '<span class="chip sm">+' + R.peserta_baru + ' bulan ini</span>' : '<span class="chip line sm">' + R.umkm_unik + ' UMKM</span>', R.peserta, '<div class="row g4 wrap">' + SEKTOR.map(s => '<span class="chip line sm">' + sk[s] + ' ' + (R.per_sektor[s] || 0) + '</span>').join('') + '</div>') +
+      kartu('Pelatihan & Kelulusan', '<span class="chip ok sm">' + R.lulus + ' lulus</span>', R.pelatihan, 'program · ' + R.lulus + ' dari ' + R.peserta + ' peserta lulus (' + (R.peserta ? Math.round(R.lulus / R.peserta * 100) : 0) + '%)') +
+      kartu('Rata-rata Kehadiran', L && d.ytd && R.kehadiran_live !== null ? '<span class="chip ok sm">Live ' + UI.angka(R.kehadiran_live) + '%</span>' : '', R.kehadiran === null ? '–' : UI.angka(R.kehadiran) + '%', R.hadir_total + ' dari ' + R.hari_total + ' hari-peserta hadir', 'c-primary') +
+      kartu('Tugas & Materi', R.tugas_menunggu ? '<span class="chip warn sm">' + R.tugas_menunggu + ' perlu cek</span>' : '<span class="chip ok sm">Beres</span>', R.tugas_masuk, 'berkas tugas masuk · ' + R.materi + ' modul PDF') + '</div>';
 
     let live = '';
     if (L) {
@@ -127,14 +127,14 @@ const Admin = {
       const rows = d.rekap.filter(f), per = 5;
       const box = $('[data-rekap]', isi);
       const n = k => d.rekap.filter({ berlangsung: p => p.status === 'berlangsung', selesai: p => p.status === 'selesai', datang: p => p.status === 'akan datang' }[k]).length;
-      box.innerHTML = '<div class="card-h wrap"><div class="ttl"><div class="ic-tile sm">' + UI.ic('clipboard', 'sm') + '</div><span class="h-md">Rekap Program ' + d.tahun + '</span></div>' +
+      box.innerHTML = '<div class="card-h wrap"><div class="ttl"><div class="ic-tile sm">' + UI.ic('clipboard', 'sm') + '</div><span class="h-md">Rekap Program Pelatihan</span></div>' +
         '<div class="seg pill" data-tab>' + [['semua', 'Semua (' + d.rekap.length + ')'], ['berlangsung', 'Berjalan (' + n('berlangsung') + ')'], ['selesai', 'Selesai (' + n('selesai') + ')'], ['datang', 'Akan Datang (' + n('datang') + ')']].map(x => '<button data-v="' + x[0] + '" class="' + (tab === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div></div>' +
         (rows.length ? '<div class="list">' + rows.slice((hal - 1) * per, hal * per).map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" style="color:inherit"><div class="ic-tile">' + UI.ic('cap') + '</div><div class="grow"><div class="row g8 wrap"><span class="semi clamp1" style="max-width:340px">' + esc(p.judul) + '</span>' + UI.chipSektor(p) + '</div>' +
           '<div class="meta"><span>' + esc(p.instruktur) + '</span><span>' + esc(UI.rentang(p)) + ' (' + p.jumlah_hari + ' Hari)</span></div></div>' +
           '<div class="right" style="min-width:90px"><div class="semi num">' + (p.status === 'akan datang' ? p.jumlah_peserta + ' / ' + p.kuota : p.hadir_penuh + ' / ' + p.jumlah_peserta) + '</div><div class="t-xs muted">' + (p.status === 'akan datang' ? 'Pendaftar / kuota' : 'Hadir penuh') + '</div></div>' + UI.chipStatus(p.status) + '</a>').join('') + '</div>' + UI.halaman(rows.length, hal, per)
           : UI.kosong('Belum ada pelatihan di kategori ini.', 'cap'));
     };
-    const evalBox = '<div class="card"><div class="card-h"><div class="ttl"><div class="ic-tile sm">' + UI.ic('trend', 'sm') + '</div><span class="h-md">Rerata Evaluasi ' + th + '</span></div></div>' +
+    const evalBox = '<div class="card"><div class="card-h"><div class="ttl"><div class="ic-tile sm">' + UI.ic('trend', 'sm') + '</div><span class="h-md">Rerata Evaluasi</span></div></div>' +
       '<div class="grid g2" style="grid-template-columns:1fr 1fr;gap:10px">' +
       [['Pre-Test', UI.angka(E.pre), 'rata-rata', ''], ['Post-Test', UI.angka(E.post), 'rata-rata', ''], ['CSI Pelatihan', E.csi_pelatihan === null ? '–' : UI.angka(E.csi_pelatihan) + '%', 'Skor ' + UI.angka(E.skor_pelatihan, 2) + ' / 4', 'ok'], ['CSI Instruktur', E.csi_instruktur === null ? '–' : UI.angka(E.csi_instruktur) + '%', 'Skor ' + UI.angka(E.skor_instruktur, 2) + ' / 4', '']]
         .map(x => '<div class="card ' + (x[3] === 'ok' ? '' : 'well') + ' tight center" style="' + (x[3] === 'ok' ? 'background:var(--ok-bg);border-color:#CDEBDC' : '') + '"><div class="t-xs muted">' + x[0] + '</div><div class="h-lg ' + (x[3] === 'ok' ? 'c-ok' : 'c-primary') + '">' + x[1] + '</div><div class="t-xs muted">' + x[2] + '</div></div>').join('') +
