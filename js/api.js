@@ -29,7 +29,7 @@ const BACA = {
   p_riwayat: '*', p_sertifikat: '*'
 };
 const TULIS = {
-  materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_lampiran: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
+  materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_lampiran: 'tugas', p_hapus_tugas: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
   umkm_simpan: 'umkm', umkm_reset_pin: 'umkm', umkm_status: 'umkm', umkm_import: 'umkm', instruktur_simpan: 'ins',
   pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
@@ -38,7 +38,7 @@ const TULIS = {
 };
 
 // Aksi yang memang bisa lama di server (PDF, unggah, sertifikat) → batas waktu lebih longgar
-const LAMA = { sert_terbitkan: 1, sert_template: 1, sert_preview: 1, laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1, tugas_lampiran: 1, tugas_lampiran_lihat: 1 };
+const LAMA = { sert_terbitkan: 1, sert_template: 1, sert_preview: 1, laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1, tugas_lampiran: 1, tugas_lampiran_lihat: 1, p_hapus_tugas: 1 };
 
 /** Penyimpanan cache: memori (instan) + localStorage (bertahan saat aplikasi dibuka ulang). */
 const Simpan = {
@@ -88,12 +88,30 @@ const API = {
    * saat server sibuk / jaringan putus (lonjakan 50 peserta).
    * opt.onRetry(n) dipanggil tiap kali mencoba ulang.
    */
+  // Berkas yang sudah pernah dibuka disimpan sementara (sesi ini) → membuka ulang instan
+  _berkas: new Map(), BERKAS: { tugas_file: 1, tugas_lampiran_lihat: 1, p_unduh_sertifikat: 1 },
   async call(action, data = {}, opt = {}) {
+    if (this.BERKAS[action]) {
+      const kb = action + ':' + JSON.stringify(data || {});
+      if (this._berkas.has(kb)) return this._berkas.get(kb);
+      const hasil = await this._kirim(action, data, opt);
+      if (this._berkas.size > 20) this._berkas.clear();
+      if (hasil && hasil.data && hasil.data.length < 8000000) this._berkas.set(kb, hasil);
+      return hasil;
+    }
+    if (TULIS[action] === 'tugas' || action === 'tugas_nilai' || action === 'sert_terbitkan') this._berkas.clear();
     if (!GAS_URL || GAS_URL.indexOf('TEMPEL_') >= 0) throw new Error('GAS_URL belum diisi di js/config.js');
     const k = BACA[action] ? Simpan.kunci(action, data) : null;
     if (k && this._jalan[k] && !opt.onRetry) return this._jalan[k]; // dedupe permintaan baca yang sama
     const lokal = this.modeFB() && window.FSD && FSD.lokal(action, data);
-    const p = (lokal ? FSD.jalankan(action, data) : this._kirim(action, data, opt)).then(d => {
+    // Mode Firebase: bila penyimpanan dari perangkat ditolak aturan keamanan, otomatis diulang lewat server (GAS)
+    const jalankan = () => FSD.jalankan(action, data).catch(e => {
+      if (!e || e.code !== 'FB_IZIN') throw e;
+      FSD.izinDitolak.unshift({ action: action, waktu: new Date().toLocaleString('id-ID'), pesan: e.message });
+      console.warn('[RuangLatih] ' + e.message + ' → diulang lewat server');
+      return this._kirim(action, data, opt);
+    });
+    const p = (lokal ? jalankan() : this._kirim(action, data, opt)).then(d => {
       if (k) Simpan.set(k, d);
       if (TULIS[action]) { Simpan.basikan(TULIS[action]); if (!this.modeFB()) this.panaskanNanti(); }
       return d;

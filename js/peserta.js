@@ -171,8 +171,13 @@ const Peserta = {
         }
 ,
         kumpul: b => this.kumpulTugas(d.tugas.daftar.find(x => x.id_tugas === b.dataset.id), muatUlang),
-        lihat: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_file', { id_tugas: b.dataset.id }), 'Kiriman tugas Anda')); } catch (e) { UI.gagal(e); } },
-        lampiran: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }), 'Lampiran tugas')); } catch (e) { UI.gagal(e); } }
+        lihat: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_file', { id_tugas: b.dataset.id }), 'Kiriman tugas Anda'), 'Membuka…'); } catch (e) { UI.gagal(e); } },
+        hapusK: async b => {
+          if (!await UI.konfirmasi('Hapus kiriman tugas ini? Setelah dihapus, Anda bisa mengunggah berkas yang benar.', { ok: 'Hapus Kiriman', bahaya: true })) return;
+          try { await UI.sibuk(b, async () => { const r = await API.call('p_hapus_tugas', { id_tugas: b.dataset.id }, { retry: 4 }); UI.toast(r.message); }, 'Menghapus…'); muatUlang(); }
+          catch (e) { UI.gagal(e); muatUlang(); }
+        },
+        lampiran: async b => { try { await UI.sibuk(b, async () => UI.lihatBerkas(await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }), 'Lampiran tugas'), 'Membuka…'); } catch (e) { UI.gagal(e); } }
     };
     try { await this.ambil(v, 'p_ruang', { id_pelatihan: id }, gambar); } catch (e) { UI.galat(isi, e, () => this.ruang(v, a)); }
   },
@@ -238,7 +243,9 @@ const Peserta = {
         (x.batas_waktu ? '<div class="t-xs mt8 row g4 ' + (x.lewat ? 'c-bad' : 'c-warn') + '">' + UI.ic('clock', 'sm') + 'Batas: ' + UI.waktu(x.batas_waktu) + '</div>' : '') +
         (k ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(/pdf/.test(k.tipe_file) ? 'file' : 'image', 'sm') + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(k.nama_file) + '</div><div class="t-xs muted">Dikirim ' + UI.waktu(k.waktu) + '</div></div>' +
           '<button class="btn xs outline" data-aksi="lihat" data-id="' + esc(x.id_tugas) + '">Lihat</button></div>' + (k.catatan ? '<div class="t-sm mt8"><b>Catatan instruktur:</b> ' + esc(k.catatan) + '</div>' : '') + '</div>' : '') +
-        (boleh ? '<button class="btn ' + (k ? 'secondary' : 'primary') + ' block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + (k ? 'Ganti Berkas' : 'Unggah Tugas') + '</button><div class="hint center mt8">Foto (kamera / galeri) atau PDF · maksimal 10 MB</div>' : '') + '</div>';
+        (boleh && !k ? '<button class="btn primary block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + 'Unggah Tugas</button><div class="hint center mt8">Foto (kamera / galeri) atau PDF · maksimal 10 MB</div>' : '') +
+        (boleh && k ? '<button class="btn danger block mt12" data-aksi="hapusK" data-id="' + esc(x.id_tugas) + '">' + UI.ic('trash', 'sm') + 'Hapus Kiriman</button><div class="hint center mt8">Salah berkas? Hapus kiriman ini, lalu unggah ulang berkas yang benar.</div>' : '') +
+        (k && !k.dinilai && !boleh ? '<div class="hint center mt8">Kiriman tidak bisa diubah lagi (' + (x.lewat ? 'batas waktu sudah lewat' : 'pengumpulan sudah ditutup') + ').</div>' : '') + '</div>';
     }).join('');
   },
 

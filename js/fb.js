@@ -91,6 +91,13 @@ var FBC = {
         await uji('Daftar pendaftaran', 'berhasil', async () => (await db().collection('pendaftaran').limit(50).get()).size + ' dokumen');
         await uji('Baca PIN peserta (akun_umkm)', 'berhasil', async () => (await db().collection('akun_umkm').limit(5).get()).size + ' dokumen');
         await uji('Baca hasil evaluasi', 'berhasil', async () => (await db().collection('evaluasi_jawaban').limit(5).get()).size + ' dokumen');
+        await uji('Tulis & hapus tugas uji (aturan tugas)', 'berhasil', async () => {
+          const p = (await db().collection('pelatihan').limit(1).get()).docs[0];
+          if (!p) return 'lewati — belum ada pelatihan';
+          const ref = db().collection('tugas').doc('uji_' + Date.now());
+          await ref.set({ id_tugas: ref.id, id_pelatihan: p.id, judul: 'Uji', instruksi: 'uji', batas_waktu: '', dibuat_oleh: String(s.id), id_lampiran: '', nama_lampiran: '', tipe_lampiran: '' });
+          await ref.delete(); return 'ok';
+        });
         await uji('Tulis & hapus log uji', 'berhasil', async () => {
           const ref = db().collection('log').doc('uji_' + Date.now());
           await ref.set({ waktu: UI.hariIni(), peran: 'admin', id_pengguna: String(s.id), nama: s.nama || '', aksi: 'Uji Firebase' });
@@ -100,6 +107,13 @@ var FBC = {
         await uji('Pelatihan yang diampu', 'berhasil', async () => (await db().collection('pelatihan').where('id_instruktur', '==', String(s.id)).get()).size + ' dokumen');
         await uji('Peserta pelatihan yang diampu', 'berhasil', async () => (await db().collection('pendaftaran').where('id_instruktur', '==', String(s.id)).limit(50).get()).size + ' dokumen');
         await uji('Semua pelatihan (termasuk milik instruktur lain)', 'ditolak', async () => { await db().collection('pelatihan').limit(50).get(); });
+        await uji('Tulis & hapus tugas uji di pelatihan yang diampu', 'berhasil', async () => {
+          const p = (await db().collection('pelatihan').where('id_instruktur', '==', String(s.id)).limit(1).get()).docs[0];
+          if (!p) return 'lewati — belum mengampu pelatihan';
+          const ref = db().collection('tugas').doc('uji_' + Date.now());
+          await ref.set({ id_tugas: ref.id, id_pelatihan: p.id, judul: 'Uji', instruksi: 'uji', batas_waktu: '', dibuat_oleh: String(s.id), id_lampiran: '', nama_lampiran: '', tipe_lampiran: '' });
+          await ref.delete(); return 'ok';
+        });
         await uji('Baca PIN peserta', 'ditolak', async () => { await db().collection('akun_umkm').limit(1).get(); });
         await uji('Baca hasil evaluasi', 'ditolak', async () => { await db().collection('evaluasi_jawaban').limit(1).get(); });
       } else {
@@ -115,7 +129,9 @@ var FBC = {
           await uji('Kunci jawaban', 'ditolak', async () => { await db().doc('kunci_soal/' + reg.id_pelatihan).get(); });
         }
       }
-      $('[data-ringkas]', el).innerHTML = '<div class="card well tight row between"><span class="semi">' + lulus + ' dari ' + total + ' uji berhasil</span>' + (lulus === total ? '<span class="chip ok">Siap lanjut</span>' : '<span class="chip bad">Perlu diperiksa</span>') + '</div>';
+      const tolak = (window.FSD && FSD.izinDitolak) || [];
+      $('[data-ringkas]', el).innerHTML = '<div class="card well tight row between"><span class="semi">' + lulus + ' dari ' + total + ' uji berhasil</span>' + (lulus === total ? '<span class="chip ok">Siap lanjut</span>' : '<span class="chip bad">Perlu diperiksa</span>') + '</div>' +
+        (tolak.length ? '<div class="card well tight mt12"><div class="semi t-sm">Penyimpanan yang dialihkan ke server (sesi ini)</div>' + tolak.slice(0, 10).map(x => '<div class="t-xs muted mt8">' + esc(x.waktu) + ' · ' + esc(x.action) + ' — ' + esc(x.pesan) + '</div>').join('') + '</div>' : '');
     };
     $('[data-ulang]', el).onclick = e => UI.sibuk(e.currentTarget, jalan);
     const bm = $('[data-mode]', el);

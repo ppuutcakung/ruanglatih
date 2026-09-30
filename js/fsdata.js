@@ -8,15 +8,16 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '3.2', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '3.4', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
   BACA: ['pelatihan_list', 'pelatihan_detail', 'materi_list', 'soal_list', 'tugas_list', 'nilai_rekap', 'dasbor_instruktur', 'dasbor_admin',
     'draft_list', 'umkm_list', 'umkm_riwayat', 'instruktur_list', 'eval_form', 'eval_hasil', 'log_list', 'laporan_data',
     'p_beranda', 'p_pelatihan', 'p_ruang', 'p_soal', 'p_eval_form', 'p_materi', 'p_riwayat', 'p_sertifikat', 'multi'],
+  // tugas_nilai sengaja lewat server (GAS): nilai adalah data penting → tidak bergantung aturan di browser
   TULIS: ['pelatihan_simpan', 'pelatihan_hapus', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',
-    'peserta_hapus', 'umkm_status', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan', 'tugas_hapus', 'tugas_nilai',
+    'peserta_hapus', 'umkm_status', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan', 'tugas_hapus',
     'eval_simpan_form', 'eval_salin', 'p_absen', 'p_kirim_eval'],
   /** true bila aksi ini dijalankan di perangkat (bukan di GAS). */
   lokal(action, d) {
@@ -140,9 +141,43 @@ var FSD = {
     const u = Sesi.user();
     const sesi = { r: u.peran, id: u.id, n: u.nama, u: u.umkm, s: u.sektor, gp: !!u.wajib_ganti_pin };
     const r = MESIN.jalankan(this, action, data || {}, sesi);
-    if (r.tulisan.length) { this.terapkanLokal(r.tulisan); await this.tulis(r.tulisan); }
+    if (r.tulisan.length) {
+      // log aktivitas dikirim terpisah: bila log gagal, penyimpanan utama tetap berhasil
+      const utama = r.tulisan.filter(w => w.col !== 'log'), log = r.tulisan.filter(w => w.col === 'log');
+      await this.cocokkanAuth();
+      this.terapkanLokal(r.tulisan);
+      try { if (utama.length) await this.tulis(utama); }
+      catch (e) { this.bersihkanHantu(utama); throw e; }
+      if (log.length) this.tulis(log).catch(() => { });
+    }
     return JSON.parse(JSON.stringify(r.hasil));
   },
+
+  /**
+   * Pastikan identitas Firebase di browser = akun yang sedang dipakai di aplikasi.
+   * (Login Firebase berlaku untuk semua tab; bila akun lain masuk di tab lain, identitas bisa tertukar.)
+   */
+  async cocokkanAuth() {
+    const s = Sesi.user();
+    if (!s || !FBC.auth) return;
+    let u = FBC.auth.currentUser;
+    let ok = u && u.uid === String(s.id);
+    if (ok) { try { ok = (await u.getIdTokenResult()).claims.peran === s.peran; } catch (e) { ok = false; } }
+    if (!ok) {
+      try { await FBC.auth.signOut(); } catch (e) { }
+      const r = await API._kirim('fb_token', {}, { retry: 2 });
+      await FBC.masuk(r.fb_token);
+    }
+  },
+  /** Setelah tulisan ditolak: buang dokumen "bayangan" yang sempat ditampilkan lokal. */
+  bersihkanHantu(W) {
+    W.forEach(w => {
+      const ada = Object.keys(this._src).some(k => this._src[k].col === w.col && this._src[k].ids.has(w.id));
+      if (!ada && this.data[w.col]) this.data[w.col].delete(w.id);
+    });
+    this._versi++;
+  },
+  izinDitolak: [],
 
   /** Terapkan perubahan ke salinan lokal SEKETIKA (halaman berikutnya langsung melihat data baru). */
   terapkanLokal(W) {
@@ -190,7 +225,12 @@ var FSD = {
       kirim.push(b.commit());
     }
     // Offline: perubahan sudah tersimpan di perangkat & terkirim otomatis saat sinyal kembali
-    const semua = Promise.all(kirim).catch(e => { throw new Error((e && e.code) === 'permission-denied' ? 'Perubahan ditolak: Anda tidak memiliki hak untuk data ini.' : 'Gagal menyimpan ke Firebase: ' + ((e && e.message) || e)); });
+    const semua = Promise.all(kirim).catch(e => {
+      const izin = (e && e.code) === 'permission-denied';
+      const err = new Error(izin ? 'Perubahan ditolak aturan keamanan (' + W.map(w => w.col).filter((c, i, a) => a.indexOf(c) === i).join(', ') + ').' : 'Gagal menyimpan ke Firebase: ' + ((e && e.message) || e));
+      if (izin) err.code = 'FB_IZIN';
+      throw err;
+    });
     const hasil = await Promise.race([semua.then(() => 'ok'), new Promise(r => setTimeout(() => r('lambat'), 6000))]);
     if (hasil === 'lambat') {
       if (navigator.onLine === false) { semua.catch(e => UI.toast(e.message, 'bad')); return; } // tersimpan di perangkat, dikirim saat online

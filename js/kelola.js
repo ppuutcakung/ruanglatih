@@ -478,7 +478,7 @@ const Kelola = {
       });
     };
     const peta = {
-      lampiranT: async b => { try { await UI.sibuk(b, async () => { const f = await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }); UI.lihatBerkas(f, 'Lampiran tugas'); }); } catch (e) { UI.gagal(e); } },
+      lampiranT: async b => { try { await UI.sibuk(b, async () => { const f = await API.call('tugas_lampiran_lihat', { id_tugas: b.dataset.id }); UI.lihatBerkas(f, 'Lampiran tugas'); }, 'Membuka…'); } catch (e) { UI.gagal(e); } },
       buat: () => idPel ? editor() : UI.toast('Pilih satu pelatihan terlebih dahulu.', 'info'),
       ubahT: b => editor(data.tugas.find(t => t.id_tugas === b.dataset.id)),
       hapusT: async b => {
@@ -511,7 +511,7 @@ const Kelola = {
   pasangAksiKumpul(peta, ambil, sesudah) {
     const cari = b => ambil().find(k => k.id_tugas === b.dataset.t && k.id_umkm === b.dataset.u);
     peta.lihatK = async b => {
-      try { await UI.sibuk(b, async () => { const f = await API.call('tugas_file', { id_tugas: b.dataset.t, id_umkm: b.dataset.u }); const k = cari(b); UI.lihatBerkas(f, k ? k.nama_umkm + ' — ' + k.judul_tugas : f.nama); }); } catch (e) { UI.gagal(e); }
+      try { await UI.sibuk(b, async () => { const f = await API.call('tugas_file', { id_tugas: b.dataset.t, id_umkm: b.dataset.u }); const k = cari(b); UI.lihatBerkas(f, k ? k.nama_umkm + ' — ' + k.judul_tugas : f.nama); }, 'Membuka…'); } catch (e) { UI.gagal(e); }
     };
     peta.nilaiK = b => {
       const k = cari(b);

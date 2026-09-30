@@ -248,6 +248,7 @@ function rute() {
     p_soal: { peran: P, fn: aksiPSoal },
     p_kirim_tes: { peran: P, fn: aksiPKirimTes },
     p_kumpul_tugas: { peran: P, fn: aksiPKumpulTugas },
+    p_hapus_tugas: { peran: P, fn: aksiPHapusTugas },
     p_eval_form: { peran: P, fn: aksiPEvalForm },
     p_kirim_eval: { peran: P, fn: aksiPKirimEval },
     p_materi: { peran: P, fn: aksiPMateri },
@@ -2111,6 +2112,7 @@ function aksiPKumpulTugas(d, s) {
   if (t.batas_waktu && now() > t.batas_waktu) throw new Error('Batas waktu pengumpulan sudah lewat.');
   const lama = DB.find('Pengumpulan_Tugas', x => x.id_tugas === t.id_tugas && x.id_umkm === s.id);
   if (lama && lama.skor !== '') throw new Error('Tugas sudah dinilai, tidak bisa diganti.');
+  if (lama) throw new Error('Anda sudah mengirim berkas untuk tugas ini. Hapus kiriman lama terlebih dahulu bila ingin mengunggah ulang.');
   const f = d.file || {};
   const tipe = String(f.tipe || '');
   if (!/^(image\/(jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('File harus JPG, PNG, atau PDF.');
@@ -2125,16 +2127,11 @@ function aksiPKumpulTugas(d, s) {
 
   return denganKunci(() => {
     const cek = DB.find('Pengumpulan_Tugas', x => x.id_tugas === t.id_tugas && x.id_umkm === s.id);
+    if (cek) { file.setTrashed(true); throw new Error('Anda sudah mengirim berkas untuk tugas ini. Hapus kiriman lama terlebih dahulu.'); }
     const data = { id_file: file.getId(), nama_file: f.nama || namaFile, tipe_file: tipe, waktu_kumpul: now(), skor: '', catatan_instruktur: '', dinilai_oleh: '', waktu_dinilai: '' };
-    if (cek) {
-      if (cek.skor !== '') { file.setTrashed(true); throw new Error('Tugas sudah dinilai, tidak bisa diganti.'); }
-      try { DriveApp.getFileById(cek.id_file).setTrashed(true); } catch (e) { }
-      DB.update('Pengumpulan_Tugas', cek, data);
-    } else {
-      DB.insert('Pengumpulan_Tugas', Object.assign({ id_tugas: t.id_tugas, id_umkm: s.id }, data));
-    }
+    DB.insert('Pengumpulan_Tugas', Object.assign({ id_tugas: t.id_tugas, id_umkm: s.id }, data));
     catatLog(s, (s.u || s.id) + ' mengunggah berkas tugas "' + t.judul + '"');
-    return { message: cek ? 'Berkas tugas diganti.' : 'Tugas terkirim.' };
+    return { message: 'Tugas terkirim.' };
   });
 }
 
@@ -2279,6 +2276,27 @@ function aksiQrAbsen(d) {
     DB.insert('Absensi', { id_pelatihan: p.id_pelatihan, id_umkm: u.id_umkm, hari_ke: hari, tanggal: slot.tanggal, waktu_absen: w, metode: 'qr' });
     catatLog({ r: 'peserta', id: u.id_umkm }, 'Absen Hari ' + hari + ' via scan QR — "' + p.judul + '"');
     return Object.assign(info, { sudah: false, waktu: w, message: 'Absensi Hari ' + hari + ' berhasil tercatat.' });
+  });
+}
+
+/**
+ * Peserta menghapus kiriman tugasnya sendiri (untuk mengunggah ulang bila salah berkas).
+ * Tidak bisa bila: sudah dinilai, batas waktu lewat, atau pengumpulan sudah ditutup.
+ */
+function aksiPHapusTugas(d, s) {
+  const t = DB.find('Tugas', x => x.id_tugas === d.id_tugas);
+  if (!t) throw new Error('Tugas tidak ditemukan.');
+  const p = cekAkses(s, t.id_pelatihan);
+  return denganKunci(() => {
+    const k = DB.find('Pengumpulan_Tugas', x => x.id_tugas === t.id_tugas && x.id_umkm === s.id);
+    if (!k) throw new Error('Tidak ada kiriman untuk dihapus.');
+    if (k.skor !== '') throw new Error('Tugas sudah dinilai, kiriman tidak bisa dihapus.');
+    if (t.batas_waktu && now() > t.batas_waktu) throw new Error('Batas waktu pengumpulan sudah lewat, kiriman tidak bisa dihapus.');
+    if (!aktivitasBuka(p, 'tugas')) throw new Error('Pengumpulan tugas sudah ditutup, kiriman tidak bisa dihapus.');
+    try { DriveApp.getFileById(k.id_file).setTrashed(true); } catch (e) { }
+    DB.remove('Pengumpulan_Tugas', [k]);
+    catatLog(s, (s.u || s.id) + ' menghapus kiriman tugas "' + t.judul + '"');
+    return { message: 'Kiriman dihapus. Silakan unggah berkas yang benar.' };
   });
 }
 
