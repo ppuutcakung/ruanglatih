@@ -129,7 +129,7 @@ const Kelola = {
       const tolak = [];
       pilih.forEach(f => {
         if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) tolak.push(f.name + ': bukan PDF');
-        else if (f.size > 50 * 1048576) tolak.push(f.name + ': Ukuran file maksimal 50 MB');
+        else if (f.size > 200 * 1048576) tolak.push(f.name + ': terlalu besar (maks 50 MB setelah diperkecil)');
         else files.push({ file: f, judul: f.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim() });
       });
       err.hidden = !tolak.length; err.innerHTML = tolak.map(esc).join('<br>');
@@ -147,6 +147,13 @@ const Kelola = {
         const row = $('[data-i="' + i + '"]', daftar), bar = $('.bar', row), pct = $('[data-pct]', row);
         bar.hidden = false;
         try {
+          // PDF otomatis diperkecil di perangkat sebelum diunggah
+          if (!files[i].kecil && window.PDFKECIL) {
+            const r = await PDFKECIL.kecilkan(files[i].file, { progres: t => { pct.textContent = t.replace('Memperkecil PDF… ', '').replace('Memperkecil PDF…', 'Memperkecil…'); } });
+            files[i].file = r.file; files[i].kecil = true;
+            if (r.metode !== 'asli') $('.t-xs.muted', row).textContent = files[i].file.name + ' · ' + PDFKECIL.ringkas(r);
+          }
+          if (files[i].file.size > 50 * 1048576) throw new Error('Masih ' + UI.ukuran(files[i].file.size) + ' setelah diperkecil (maks 50 MB) — pecah menjadi beberapa PDF');
           await API.unggahBesar(files[i].file, { id_pelatihan: pel.id_pelatihan, judul: files[i].judul, cakupan: cakupan, sektor: sektor }, p => { $('i', bar).style.width = p + '%'; pct.textContent = p + '%'; });
           pct.innerHTML = UI.ic('check', 'sm'); ok++;
         } catch (e) { pct.textContent = 'Gagal'; gagal.push(files[i].file.name + ': ' + e.message); }
@@ -440,7 +447,7 @@ const Kelola = {
           { name: 'lampiran', label: 'Lampiran tugas (opsional)', type: 'html', full: true,
             html: '<div class="row wrap g8" style="align-items:center"><button type="button" class="btn secondary sm" data-pilihlamp>' + UI.ic('upload', 'sm') + 'Pilih PDF / Gambar</button>' +
               '<span class="t-sm" data-namalamp></span><button type="button" class="btn ghost sm" data-hapuslamp hidden>' + UI.ic('x', 'sm') + 'Hapus</button></div>',
-            hint: 'Contoh format, panduan, atau contoh hasil. PDF, JPG, atau PNG · maks 10 MB · dapat dibuka peserta di Ruang Pelatihan.' }
+            hint: 'Contoh format, panduan, atau contoh hasil. PDF atau gambar (otomatis diubah ke WebP) · maks 10 MB · dapat dibuka peserta di Ruang Pelatihan.' }
         ],
         onOpen: (m, form) => {
           const nm = $('[data-namalamp]', form), hp = $('[data-hapuslamp]', form);
@@ -449,7 +456,7 @@ const Kelola = {
           $('[data-pilihlamp]', form).onclick = async () => {
             const f = (await UI.pilihFile('application/pdf,image/*', false))[0];
             if (!f) return;
-            try { lamp = { file: await UI.siapkanBerkas(f, 10) }; segar(); } catch (e) { UI.gagal(e); }
+            try { nm.innerHTML = '<span class="spin" style="width:12px;height:12px"></span> Menyiapkan berkas…'; lamp = { file: await UI.siapkanBerkas(f, 10, t => { nm.textContent = t; }) }; segar(); } catch (e) { segar(); UI.gagal(e); }
           };
           hp.onclick = () => { lamp = lamp.file ? {} : { hapus: true }; segar(); };
         },

@@ -299,54 +299,54 @@ const UI = {
   },
   async fileKeObj(file) { return { nama: file.name, tipe: file.type || '', ukuran: file.size, data: await UI.blobKeBase64(file) }; },
 
-  /** Perkecil foto (maks 1600 px, JPEG) agar unggahan hemat kuota — hanya bila ukurannya > 1 MB. */
-  async kompres(file, maks) {
-    maks = maks || 1600;
-    if (!/^image\/(jpeg|png)$/.test(file.type) || file.size < 1024 * 1024) return file;
-    try {
-      const url = URL.createObjectURL(file);
-      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-      const s = Math.min(1, maks / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-      const g = c.getContext('2d');
-      g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
-      g.drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.84));
-      if (!blob || blob.size >= file.size) return file;
-      return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
-    } catch (e) { return file; }
-  },
   /**
-   * Siapkan berkas unggahan tugas/lampiran: PDF apa adanya; foto apa pun (termasuk WebP/HEIC bila
-   * browser bisa membukanya) diubah ke JPEG & diperkecil. Hasil: File PDF/JPG/PNG ≤ maksMB.
+   * Ubah gambar apa pun (JPG, PNG, HEIC/WebP bila browser bisa membukanya) menjadi WebP & perkecil (maks 1600 px).
+   * WebP = format standar RuangLatih: berkas jauh lebih kecil → unggah & buka lebih cepat, Drive lebih hemat.
+   * Browser lama tanpa dukungan WebP → otomatis JPEG.
    */
-  async siapkanBerkas(file, maksMB) {
-    maksMB = maksMB || 10;
-    const pdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
-    if (!pdf && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) throw new Error('Berkas harus berupa foto (JPG/PNG) atau PDF.');
-    let hasil = file;
-    if (pdf) { if (file.type !== 'application/pdf') hasil = new File([file], file.name, { type: 'application/pdf' }); }
-    else if (/^image\/(jpeg|png)$/.test(file.type)) hasil = await UI.kompres(file);
-    else hasil = await UI.keJpeg(file);
-    if (hasil.size > maksMB * 1048576) throw new Error('Ukuran berkas maksimal ' + maksMB + ' MB.');
-    return hasil;
-  },
-  /** Ubah gambar format lain (WebP, HEIC di iPhone/Safari, GIF, BMP) menjadi JPEG. */
-  async keJpeg(file, maks) {
+  async keWebp(file, maks, kualitas) {
     maks = maks || 1600;
     const url = URL.createObjectURL(file);
     try {
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
       const s = Math.min(1, maks / Math.max(img.width, img.height)), c = document.createElement('canvas');
-      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
-      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.86));
-      return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+      c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, c.width, c.height);
+      let blob = await new Promise(res => c.toBlob(res, 'image/webp', kualitas || 0.82));
+      let tipe = 'image/webp', ext = '.webp';
+      if (!blob || blob.type !== 'image/webp') { // browser tanpa WebP → JPEG berlatar putih
+        g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+        blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.84)); tipe = 'image/jpeg'; ext = '.jpg';
+      }
+      return new File([blob], file.name.replace(/\.\w+$/, '') + ext, { type: tipe });
     } catch (e) {
       throw new Error('Format foto ini belum bisa dibuka. Gunakan JPG/PNG — di iPhone: Pengaturan › Kamera › Format › "Paling Kompatibel".');
     } finally { URL.revokeObjectURL(url); }
+  },
+  /** (nama lama, tetap tersedia) foto → WebP. */
+  async kompres(file, maks) { return /^image\//.test(file.type) ? UI.keWebp(file, maks) : file; },
+  async keJpeg(file, maks) { return UI.keWebp(file, maks); },
+  /**
+   * Siapkan berkas unggahan tugas/lampiran: PDF apa adanya; foto apa pun diubah ke WebP & diperkecil.
+   * Hasil: File PDF / WebP (atau JPG di browser lama) ≤ maksMB.
+   */
+  async siapkanBerkas(file, maksMB, progres) {
+    maksMB = maksMB || 10;
+    const pdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
+    if (!pdf && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) throw new Error('Berkas harus berupa foto atau PDF.');
+    let hasil = file;
+    if (pdf) {
+      if (file.size > maksMB * 4 * 1048576) throw new Error('PDF terlalu besar (maks ' + maksMB + ' MB setelah diperkecil).');
+      hasil = file.type === 'application/pdf' ? file : new File([file], file.name, { type: 'application/pdf' });
+      if (window.PDFKECIL) { // PDF otomatis diperkecil di perangkat
+        const r = await PDFKECIL.kecilkan(hasil, { progres: progres });
+        hasil = r.file;
+        if (r.metode !== 'asli') UI.toast(PDFKECIL.ringkas(r), 'info');
+      }
+    } else hasil = await UI.keWebp(file);
+    if (hasil.size > maksMB * 1048576) throw new Error('Ukuran berkas maksimal ' + maksMB + ' MB' + (pdf ? ' (sudah diperkecil, masih ' + UI.ukuran(hasil.size) + '). Pecah PDF menjadi beberapa bagian.' : '.'));
+    return hasil;
   },
   base64KeBlob(o) {
     const bin = atob(o.data), n = bin.length, u = new Uint8Array(n);

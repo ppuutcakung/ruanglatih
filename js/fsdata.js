@@ -8,7 +8,7 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '3.6', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '3.7', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
@@ -44,21 +44,27 @@ var FSD = {
       const kol = (key, q, col) => tunggu.push(this.dengar(key, q, col));
       const dok = (key, ref, col) => tunggu.push(this.dengarDok(key, ref, col));
       dok('pengaturan', db.doc('pengaturan/umum'), 'pengaturan');
-      kol('materi', db.collection('materi'), 'materi');
+      // ⚡ HEMAT KUOTA: yang dimuat hanya data inti; data besar (soal, kiriman tugas, jawaban evaluasi, log lengkap)
+      //    dimuat per pelatihan / saat halamannya dibuka. Firestore menagih baca hanya untuk dokumen yang dimuat/berubah.
       if (u.peran === 'admin') {
-        ['pelatihan', 'pendaftaran', 'umkm', 'akun_umkm', 'instruktur', 'akun_instruktur', 'pelatihan_rahasia', 'soal', 'kunci_soal', 'tugas',
-          'pengumpulan', 'evaluasi_form', 'evaluasi_jawaban', 'draft_pelatihan'].forEach(c => kol(c, db.collection(c), c));
-        kol('log', db.collection('log').orderBy('waktu', 'desc').limit(1000), 'log');
+        ['pelatihan', 'pendaftaran', 'umkm', 'akun_umkm', 'instruktur', 'akun_instruktur', 'pelatihan_rahasia', 'tugas', 'materi',
+          'evaluasi_form', 'draft_pelatihan'].forEach(c => kol(c, db.collection(c), c));
+        kol('log', db.collection('log').orderBy('waktu', 'desc').limit(5), 'log'); // dasbor cukup 5 terbaru
       } else if (u.peran === 'instruktur') {
         kol('pelatihan', db.collection('pelatihan').where('id_instruktur', '==', uid), 'pelatihan');
         kol('pendaftaran', db.collection('pendaftaran').where('id_instruktur', '==', uid), 'pendaftaran');
         dok('instruktur', db.doc('instruktur/' + uid), 'instruktur');
+        kol('materi', db.collection('materi'), 'materi');
       } else {
         kol('pendaftaran', db.collection('pendaftaran').where('id_umkm', '==', uid), 'pendaftaran');
-        kol('pelatihan', db.collection('pelatihan'), 'pelatihan');
+        // pelatihan: yang akan datang/berlangsung (info & flyer) + yang diikuti (dimuat per pelatihan)
+        kol('pelatihan', db.collection('pelatihan').where('status', 'in', ['akan datang', 'berlangsung']), 'pelatihan');
         dok('umkm', db.doc('umkm/' + uid), 'umkm');
         kol('pengumpulan', db.collection('pengumpulan').where('id_umkm', '==', uid), 'pengumpulan');
         dok('evalDEFAULT', db.doc('evaluasi_form/DEFAULT'), 'evaluasi_form');
+        // materi: umum + sektor usahanya (+ materi pelatihan yang diikuti, per pelatihan)
+        kol('materiUmum', db.collection('materi').where('cakupan', '==', 'umum'), 'materi');
+        if (u.sektor) kol('materiSektor', db.collection('materi').where('sektor', '==', u.sektor), 'materi');
       }
       await Promise.all(tunggu);
       await this.perPelatihan();
@@ -72,22 +78,50 @@ var FSD = {
   },
 
   /** Data per pelatihan (soal, tugas, dst.) untuk pelatihan milik instruktur / yang diikuti peserta. */
+  /**
+   * Data per pelatihan: instruktur → semua pelatihannya; peserta → yang diikuti;
+   * admin → pelatihan tahun berjalan & yang belum selesai (pelatihan lain dimuat saat dibuka).
+   */
   perPelatihan() {
     const u = Sesi.user();
-    if (!u || u.peran === 'admin' || !FBC.db) return Promise.resolve();
-    const db = FBC.db, ids = u.peran === 'instruktur' ? this.kol('pelatihan').map(p => p._id) : this.kol('pendaftaran').map(r => r.id_pelatihan);
-    const baru = ids.filter(id => !this._pel[id]);
-    const tunggu = [];
-    baru.forEach(id => {
-      this._pel[id] = 1;
-      tunggu.push(this.dengar('soal:' + id, db.collection('soal').where('id_pelatihan', '==', id), 'soal'));
-      tunggu.push(this.dengar('tugas:' + id, db.collection('tugas').where('id_pelatihan', '==', id), 'tugas'));
+    if (!u || !FBC.db) return Promise.resolve();
+    const th = UI.hariIni().slice(0, 4);
+    const ids = u.peran === 'instruktur' ? this.kol('pelatihan').map(p => p._id)
+      : u.peran === 'peserta' ? this.kol('pendaftaran').map(r => r.id_pelatihan)
+        : this.kol('pelatihan').filter(p => p.tahun === th || p.status !== 'selesai').map(p => p._id);
+    return Promise.all(ids.map(id => this.muatPelatihan(id)));
+  },
+  /** Pasang pendengar data satu pelatihan (sekali per sesi). */
+  muatPelatihan(id) {
+    const u = Sesi.user();
+    if (!id || !u || !FBC.db) return Promise.resolve();
+    if (this._pel[id]) return this._pel[id];
+    const db = FBC.db, t = [];
+    if (u.peran === 'admin') {
+      t.push(this.dengar('soal:' + id, db.collection('soal').where('id_pelatihan', '==', id), 'soal'));
+      t.push(this.dengarDok('kunci:' + id, db.doc('kunci_soal/' + id), 'kunci_soal'));
+      t.push(this.dengar('kumpul:' + id, db.collection('pengumpulan').where('id_pelatihan', '==', id), 'pengumpulan'));
+      t.push(this.dengar('evalj:' + id, db.collection('evaluasi_jawaban').where('id_pelatihan', '==', id), 'evaluasi_jawaban'));
+    } else {
+      t.push(this.dengar('soal:' + id, db.collection('soal').where('id_pelatihan', '==', id), 'soal'));
+      t.push(this.dengar('tugas:' + id, db.collection('tugas').where('id_pelatihan', '==', id), 'tugas'));
       if (u.peran === 'instruktur') {
-        tunggu.push(this.dengarDok('kunci:' + id, db.doc('kunci_soal/' + id), 'kunci_soal'));
-        tunggu.push(this.dengar('kumpul:' + id, db.collection('pengumpulan').where('id_pelatihan', '==', id), 'pengumpulan'));
-      } else tunggu.push(this.dengarDok('eval:' + id, db.doc('evaluasi_form/' + id), 'evaluasi_form'));
-    });
-    return Promise.all(tunggu);
+        t.push(this.dengarDok('kunci:' + id, db.doc('kunci_soal/' + id), 'kunci_soal'));
+        t.push(this.dengar('kumpul:' + id, db.collection('pengumpulan').where('id_pelatihan', '==', id), 'pengumpulan'));
+      } else {
+        t.push(this.dengarDok('eval:' + id, db.doc('evaluasi_form/' + id), 'evaluasi_form'));
+        t.push(this.dengarDok('pel:' + id, db.doc('pelatihan/' + id), 'pelatihan'));
+        t.push(this.dengar('materiPel:' + id, db.collection('materi').where('id_pelatihan', '==', id), 'materi'));
+      }
+    }
+    return (this._pel[id] = Promise.all(t));
+  },
+  /** Admin: data lengkap satu tahun (mis. dasbor tahun lalu). */
+  muatTahun(th) { return Promise.all(this.kol('pelatihan').filter(p => p.tahun === String(th)).map(p => this.muatPelatihan(p._id))); },
+  /** Admin: log aktivitas lengkap (hanya saat halaman Log dibuka; log dibersihkan tiap akhir bulan). */
+  muatLogPenuh() {
+    if (this._logPenuh) return this._logPenuh;
+    return (this._logPenuh = this.dengar('logPenuh', FBC.db.collection('log').orderBy('waktu', 'desc').limit(500), 'log'));
   },
 
   _simpanDok(col, id, isi, key) {
@@ -156,7 +190,7 @@ var FSD = {
 
   berhenti() {
     this._off.forEach(f => { try { f(); } catch (e) { } });
-    this._off = []; this.data = {}; this._src = {}; this._pel = {}; this._siap = null; this._uid = ''; this._aktif = false;
+    this._off = []; this.data = {}; this._src = {}; this._pel = {}; this._siap = null; this._uid = ''; this._aktif = false; this._logPenuh = null;
   },
 
   // ---------- Jalankan aksi di perangkat ----------
@@ -164,6 +198,11 @@ var FSD = {
     await this.mulai();
     const u = Sesi.user();
     const sesi = { r: u.peran, id: u.id, n: u.nama, u: u.umkm, s: u.sektor, gp: !!u.wajib_ganti_pin };
+    // muat data tambahan yang dibutuhkan aksi ini saja (hemat kuota)
+    const d = data || {};
+    if (d.id_pelatihan) await this.muatPelatihan(d.id_pelatihan);
+    if (action === 'dasbor_admin' && d.tahun) await this.muatTahun(d.tahun);
+    if (action === 'log_list' && u.peran === 'admin') await this.muatLogPenuh();
     const r = MESIN.jalankan(this, action, data || {}, sesi);
     if (r.tulisan.length) {
       // log aktivitas dikirim terpisah: bila log gagal, penyimpanan utama tetap berhasil

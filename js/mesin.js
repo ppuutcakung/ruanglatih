@@ -2,7 +2,7 @@
    RuangLatih — mesin.js  (DIBANGUN OTOMATIS — jangan diedit manual)
    Logika backend yang sama dengan GAS, dijalankan di browser di atas
    salinan data Firestore (mode Firebase). Sumber: Kode/Pelatihan/Admin/
-   Peserta/Laporan/Cermin.gs · dibangun 2026-09-30
+   Peserta/Laporan/Cermin.gs · dibangun 2026-10-02
    ============================================================= */
 var MESIN = (function () {
 
@@ -954,7 +954,8 @@ function bersihkanLogBulanan() {
   const hi = hariIni(), bulanIni = hi.slice(0, 7);
   const t = hi.split('-').map(Number);
   const akhirBulan = new Date(t[0], t[1], 0).getDate() === t[2];
-  if (CONFIG.prop('DATA_SUMBER') === 'firebase' && typeof FB !== 'undefined' && FB.siap()) bersihkanLogFirestore(akhirBulan, bulanIni);
+  // hemat kuota Firestore: log hanya dibaca di hari terakhir bulan & 2 hari pertama (susulan bila jadwal terlewat)
+  if (CONFIG.prop('DATA_SUMBER') === 'firebase' && typeof FB !== 'undefined' && FB.siap() && (akhirBulan || t[2] <= 2)) bersihkanLogFirestore(akhirBulan, bulanIni);
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(60000)) return;
   try {
@@ -1291,7 +1292,7 @@ function aksiTugasLampiran(d, s) {
     return { message: 'Lampiran tugas dihapus.' };
   }
   const f = d.file || {}, tipe = String(f.tipe || '');
-  if (!/^(image\/(jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('Lampiran harus PDF, JPG, atau PNG.');
+  if (!/^(image\/(webp|jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('Lampiran harus PDF atau gambar (WebP/JPG/PNG).');
   const bytes = Utilities.base64Decode(f.data || '');
   if (!bytes.length) throw new Error('File lampiran kosong.');
   if (bytes.length > MAX_TUGAS) throw new Error('Ukuran lampiran maksimal 10 MB.');
@@ -1635,11 +1636,11 @@ function aksiPelatihanHapus(d, s) {
 
 function aksiPelatihanFlyer(d, s) {
   const f = d.file || {};
-  if (!/^image\//.test(f.tipe || '')) throw new Error('Flyer harus berupa gambar (JPG/PNG).');
+  if (!/^image\//.test(f.tipe || '')) throw new Error('Flyer harus berupa gambar.');
   const bytes = Utilities.base64Decode(f.data || '');
   if (bytes.length > MAX_GAMBAR) throw new Error('Ukuran flyer maksimal 5 MB.');
   const p = ambilPel(d.id_pelatihan);
-  const file = folder(CONFIG.FOLDER_FLYER).createFile(Utilities.newBlob(bytes, f.tipe, 'Flyer - ' + p.judul + (/png/.test(f.tipe) ? '.png' : '.jpg')));
+  const file = folder(CONFIG.FOLDER_FLYER).createFile(Utilities.newBlob(bytes, f.tipe, 'Flyer - ' + p.judul + (/webp/.test(f.tipe) ? '.webp' : /png/.test(f.tipe) ? '.png' : '.jpg')));
   bagikanPublik(file);
   return denganKunci(() => {
     const r = DB.find('Pelatihan', x => x.id_pelatihan === d.id_pelatihan);
@@ -2130,7 +2131,7 @@ function aksiPKumpulTugas(d, s) {
   if (lama) throw new Error('Anda sudah mengirim berkas untuk tugas ini. Hapus kiriman lama terlebih dahulu bila ingin mengunggah ulang.');
   const f = d.file || {};
   const tipe = String(f.tipe || '');
-  if (!/^(image\/(jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('File harus JPG, PNG, atau PDF.');
+  if (!/^(image\/(webp|jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('File harus foto (WebP/JPG/PNG) atau PDF.');
   const bytes = Utilities.base64Decode(f.data || '');
   if (!bytes.length) throw new Error('File kosong.');
   if (bytes.length > MAX_TUGAS) throw new Error('Ukuran file maksimal 10 MB.');
@@ -2748,7 +2749,15 @@ var CERMIN = {
           .sort((a, b) => (parseFloat(a.urutan) || 0) - (parseFloat(b.urutan) || 0));
       }
       case 'Tugas': return S.kol('tugas').map(x => B(Object.assign({}, x, { id_tugas: x.id_tugas || x._id })));
-      case 'Pengumpulan_Tugas': return S.kol('pengumpulan').map(k => B(Object.assign({}, k, { catatan_instruktur: k.catatan })));
+      case 'Pengumpulan_Tugas': {
+        const ada = {}, out = S.kol('pengumpulan').map(k => { ada[k.id_tugas + '_' + k.id_umkm] = 1; return B(Object.assign({}, k, { catatan_instruktur: k.catatan })); });
+        // hemat kuota: kiriman pelatihan lama yang belum dimuat → ringkasan dari pendaftaran.tugas (cukup untuk hitungan & status)
+        S.kol('pendaftaran').forEach(r => Object.keys(r.tugas || {}).forEach(id => {
+          const t = r.tugas[id] || {};
+          if (!ada[id + '_' + r.id_umkm]) out.push(B({ id_tugas: id, id_umkm: r.id_umkm, id_file: '', waktu_kumpul: t.waktu || '', skor: t.skor, catatan_instruktur: '' }));
+        }));
+        return out;
+      }
       case 'Evaluasi_Pertanyaan': {
         const out = [];
         S.kol('evaluasi_form').forEach(f => (f.pertanyaan || []).forEach(q => out.push(B(Object.assign({ id_pelatihan: f.id_pelatihan || f._id }, q)))));

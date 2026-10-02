@@ -10,7 +10,7 @@ const AKTIVITAS = [
   ['absen_2', 'Absensi Hari 2', 'checkSquare', 'Hanya untuk pelatihan 2 hari.'],
   ['pre', 'Pre-test', 'fileQ', 'Dibuka di awal sebelum materi.'],
   ['post', 'Post-test', 'fileQ', 'Dibuka di akhir setelah materi.'],
-  ['tugas', 'Pengumpulan Tugas', 'clipboard', 'Peserta bisa mengunggah JPG/PNG/PDF.'],
+  ['tugas', 'Pengumpulan Tugas', 'clipboard', 'Peserta bisa mengunggah foto atau PDF.'],
   ['evaluasi', 'Evaluasi Pelatihan', 'edit', 'Form kepuasan diisi 1 kali per peserta.']
 ];
 const SYARAT = [['hadir', 'Hadir penuh sesuai jumlah hari'], ['post', 'Sudah mengerjakan post-test'], ['naik', 'Nilai post-test lebih tinggi dari pre-test'], ['tugas', 'Semua tugas terkumpul']];
@@ -375,11 +375,11 @@ const Admin = {
   },
 
   async unggahFlyer(b, id, sesudah) {
-    const f = (await UI.pilihFile('image/jpeg,image/png', false))[0];
+    const f = (await UI.pilihFile('image/*', false))[0];
     if (!f) return;
     try {
       await UI.sibuk(b, async () => {
-        const x = await UI.kompres(f, 1600);
+        const x = await UI.keWebp(f, 1600); // flyer disimpan sebagai WebP
         if (x.size > 5 * 1048576) throw new Error('Ukuran flyer maksimal 5 MB.');
         const o = await UI.fileKeObj(x);
         const r = await API.call('pelatihan_flyer', { id_pelatihan: id, file: { nama: o.nama, tipe: o.tipe, data: o.data } });

@@ -256,6 +256,7 @@ const Peserta = {
     const f = (await UI.pilihFile('image/*,application/pdf', false))[0];
     if (!f) return;
     let file;
+    if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) UI.toast('Memperkecil PDF… mohon tunggu sebentar.', 'info');
     try { file = await UI.siapkanBerkas(f, 10); } catch (e) { return UI.toast(e.message, 'bad'); }
     const pratinjau = /^image/.test(file.type) ? '<img src="' + URL.createObjectURL(file) + '" alt="" style="width:100%;max-height:44vh;object-fit:contain;border-radius:12px;background:var(--blush-1)">' : '<div class="empty"><div class="ic-tile">' + UI.ic('file', 'lg') + '</div></div>';
     const opts = {
