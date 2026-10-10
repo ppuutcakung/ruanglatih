@@ -8,7 +8,7 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '3.7', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '3.8', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
@@ -17,8 +17,9 @@ var FSD = {
     'p_beranda', 'p_pelatihan', 'p_ruang', 'p_soal', 'p_eval_form', 'p_materi', 'p_riwayat', 'multi'],
   // tugas_nilai sengaja lewat server (GAS): nilai adalah data penting → tidak bergantung aturan di browser
   // pelatihan_hapus & tugas_hapus lewat server: berkas Google Drive (flyer, lampiran) ikut dihapus
+  // umkm_status lewat server: akun login Firebase ikut dinonaktifkan/diaktifkan seketika
   TULIS: ['pelatihan_simpan', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',
-    'peserta_hapus', 'umkm_status', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan',
+    'peserta_hapus', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan',
     'eval_simpan_form', 'eval_salin', 'p_absen', 'p_kirim_eval'],
   /** true bila aksi ini dijalankan di perangkat (bukan di GAS). */
   lokal(action, d) {
@@ -228,8 +229,7 @@ var FSD = {
     if (ok) { try { ok = (await u.getIdTokenResult()).claims.peran === s.peran; } catch (e) { ok = false; } }
     if (!ok) {
       try { await FBC.auth.signOut(); } catch (e) { }
-      const r = await API._kirim('fb_token', {}, { retry: 2 });
-      await FBC.masuk(r.fb_token);
+      await FBC.pastikanMasuk(); // sesi lama → tiket baru dari server; login langsung → masuk ulang
     }
   },
   /** Setelah tulisan ditolak: buang dokumen "bayangan" yang sempat ditampilkan lokal. */

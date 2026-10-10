@@ -2,7 +2,7 @@
    RuangLatih — mesin.js  (DIBANGUN OTOMATIS — jangan diedit manual)
    Logika backend yang sama dengan GAS, dijalankan di browser di atas
    salinan data Firestore (mode Firebase). Sumber: Kode/Pelatihan/Admin/
-   Peserta/Laporan/Cermin.gs · dibangun 2026-10-02
+   Peserta/Laporan/Cermin.gs · dibangun 2026-10-10
    ============================================================= */
 var MESIN = (function () {
 
@@ -109,7 +109,8 @@ function doPost(e) {
 
     let sesi = null;
     if (r.peran) {
-      sesi = verifikasiToken(p.token);
+      // Sesi: token RuangLatih (login lewat server) ATAU ID token Firebase (login langsung ke Firebase)
+      sesi = verifikasiToken(p.token) || (p.idt && typeof sesiDariIdToken === 'function' ? sesiDariIdToken(p.idt) : null);
       if (!sesi) return json({ success: false, code: 'SESI', message: 'Sesi berakhir, silakan masuk kembali.' });
       if (r.peran.indexOf(sesi.r) < 0) return json({ success: false, code: 'AKSES', message: 'Anda tidak memiliki akses ke fitur ini.' });
       if (sesi.gp && !r.gp) return json({ success: false, code: 'GANTI_PIN', message: 'Ganti PIN terlebih dahulu.' });
@@ -131,6 +132,8 @@ function doPost(e) {
     const fbMode = (p.mode === 'firebase' || CONFIG.prop('DATA_SUMBER') === 'firebase') && typeof FB !== 'undefined' && FB.siap();
     try { data = fbMode ? denganCermin(p.action, p.data || {}, sesi, () => r.fn(p.data || {}, sesi)) : r.fn(p.data || {}, sesi); }
     catch (e) { if (rid) cc.remove(rid); throw e; }
+    // Mode Firebase: akun login Firebase ikut disamakan setelah data akun berubah
+    if (fbMode && typeof sinkronAkunSetelah === 'function') sinkronAkunSetelah(p.action, p.data || {}, sesi, data);
     SCACHE.terapkan();
     const keluar = JSON.stringify({ success: true, data: data === undefined ? null : data });
     if (rid) { if (keluar.length < 95000) cc.put(rid, keluar, 600); else cc.remove(rid); }
@@ -171,6 +174,7 @@ function rute() {
     sesi: { peran: SEMUA, fn: aksiSesi, gp: true },
     multi: { peran: SEMUA, fn: aksiMulti },
     fb_token: { peran: SEMUA, fn: aksiFbToken, gp: true },
+    akun_sinkron: { peran: A, fn: (d, s) => aksiAkunSinkron(d, s) },
     qr_kode: { peran: A, fn: aksiQrKode },
     branding: { fn: aksiBranding },  // publik: identitas aplikasi untuk halaman masuk
     qr_info: { fn: aksiQrInfo },     // publik: halaman scan QR absensi (tanpa login)
@@ -430,6 +434,9 @@ function bersihkanCache() {
 
 // Kunci tulis — mencegah baris saling menimpa saat 50 peserta mengirim bersamaan
 function denganKunci(fn) {
+  // Mode Firebase: tiap dokumen ditulis terpisah setelah aksi selesai → antrean kunci Spreadsheet tidak diperlukan
+  // (tanpa antrean, 30 peserta yang mengirim bersamaan diproses paralel)
+  if (DB._cermin) return fn();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) {
     const e = new Error('Server sedang sibuk, mencoba mengirim ulang...');
@@ -638,7 +645,7 @@ function aksiLogin(d) {
 function tokenFirebase(user) {
   try {
     if (typeof FB === 'undefined' || !FB.siap()) return {};
-    return { fb_token: FB.tokenKustom(user.id, { peran: user.r, gp: !!user.gp, nama: user.n || '' }) };
+    return { fb_token: FB.tokenKustom(user.id, { peran: user.r, gp: !!user.gp, nama: user.n || '', umkm: user.u || '', sektor: user.s || '' }) };
   } catch (e) { return {}; }
 }
 function aksiFbToken(d, s) {

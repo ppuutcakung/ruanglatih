@@ -181,9 +181,14 @@ var App = {
       } else data = { peran: 'admin', username: $('#m_user').value.trim(), password: $('#m_pw').value };
       try {
         await UI.sibuk(btn, async ubah => {
+          // ⚡ Jalur utama: masuk LANGSUNG ke Firebase (±0,5 detik, tidak antre di server GAS)
+          const user = await FBC.masukLangsung(data);
+          if (user) { Sesi.set({ token: '', user: user, t: Date.now() }); return; }
+          // Jalur cadangan: lewat server GAS (akun belum disiapkan / PIN berubah / mode Spreadsheet)
+          ubah('Memeriksa lewat server…');
           const r = await API.call('login', data, { retry: 6, onRetry: n => ubah('Menghubungkan ulang (' + n + ')…') });
-          Sesi.set({ token: r.token, user: r.user });
-          if (r.fb_token && FBC.aktif()) FBC.masuk(r.fb_token).catch(() => { }); // Firebase (migrasi) — di latar
+          Sesi.set({ token: r.token, user: r.user, t: Date.now() });
+          if (r.fb_token && FBC.aktif()) FBC.masuk(r.fb_token).catch(() => { }); // Firebase — di latar
         }, 'Memeriksa…');
         location.hash = '#/' + this.awal();
         this.render();
@@ -195,6 +200,14 @@ var App = {
       }
     };
     gambar();
+    if (API.modeFB() && FBC.aktif()) {
+      // Login langsung ke Firebase: siapkan SDK selagi pengguna mengetik → tombol Masuk terasa instan
+      const s = $('[data-srv]', app);
+      FBC.muat().then(() => { const x = $('[data-srv]'); if (x) x.textContent = 'Siap · Masuk Cepat'; }).catch(() => { if (s) s.textContent = 'Koneksi lambat — tetap bisa dicoba'; });
+      // Bangunkan server GAS (dipakai untuk tes, unggah tugas, berkas) di latar — jeda acak agar tidak serentak
+      setTimeout(() => this.cekServer().catch(() => { }), 2000 + Math.random() * 15000);
+      return;
+    }
     // Cek server sekaligus "membangunkan" server selagi pengguna mengetik → login lebih cepat
     this.cekServer().then(h => {
       const s = $('[data-srv]', app);
@@ -231,12 +244,7 @@ var App = {
       const salah = !/^\d{4}$/.test(lama) ? 'Isi PIN awal 4 angka.' : !/^\d{4}$/.test(baru) ? 'Isi PIN baru 4 angka.' : baru !== ulang ? 'Ulangan PIN baru tidak sama.' : baru === lama ? 'PIN baru harus berbeda dari PIN awal.' : '';
       if (salah) { err.textContent = salah; err.hidden = false; return; }
       try {
-        await UI.sibuk($('[data-kirim]', f), async () => {
-          const r = await API.call('ganti_pin', { pin_lama: lama, pin_baru: baru });
-          Sesi.set({ token: r.token, user: r.user });
-          if (r.fb_token && FBC.aktif()) FBC.masuk(r.fb_token).catch(() => { });
-          UI.toast(r.message);
-        }, 'Menyimpan…');
+        await UI.sibuk($('[data-kirim]', f), async () => { UI.toast((await this.prosesGantiPin(lama, baru)).message); }, 'Menyimpan…');
         location.hash = '#/beranda';
         this.render();
         setTimeout(() => API.panaskan(), 400);
@@ -253,11 +261,19 @@ var App = {
       onSubmit: async v => {
         if (!/^\d{4}$/.test(v.baru)) throw new Error('PIN baru harus 4 angka.');
         if (v.baru !== v.ulang) throw new Error('Ulangan PIN baru tidak sama.');
-        const r = await API.call('ganti_pin', { pin_lama: v.lama, pin_baru: v.baru });
-        Sesi.set({ token: r.token, user: r.user });
-        UI.toast(r.message);
+        UI.toast((await this.prosesGantiPin(v.lama, v.baru)).message);
       }
     });
+  },
+  /** Ganti PIN: langsung di Firebase bila bisa, selain itu lewat server. */
+  async prosesGantiPin(lama, baru) {
+    const t = (Sesi.get() || {}).t || Date.now();
+    const l = window.FBC ? await FBC.gantiPin(lama, baru) : null;
+    if (l) { Sesi.set({ token: '', user: l.user, t: t }); return l; }
+    const r = await API.call('ganti_pin', { pin_lama: lama, pin_baru: baru });
+    Sesi.set({ token: r.token, user: r.user, t: t });
+    if (r.fb_token && FBC.aktif()) FBC.masuk(r.fb_token).catch(() => { });
+    return r;
   },
 
   // ===========================================================
@@ -439,7 +455,8 @@ var App = {
     // Hemat antrean server: identitas disegarkan paling sering tiap 30 menit, dan tidak berbarengan dengan login
     const t = parseInt(localStorage.getItem('rl_brand_t') || '0', 10);
     if (b && Date.now() - t < 1800000) return;
-    setTimeout(() => API._kirim('branding', {}, { retry: 2 }).then(baru => { try { localStorage.setItem('rl_brand_t', String(Date.now())); } catch (e) { } this.simpanBrand(baru, JSON.stringify(b)); }).catch(() => { }), b ? 4000 : 0);
+    const ambil = API.modeFB() && FBC.aktif() ? () => FBC.brand() : () => API._kirim('branding', {}, { retry: 2 }); // Firebase: tanpa antre di server
+    setTimeout(() => ambil().then(baru => { try { localStorage.setItem('rl_brand_t', String(Date.now())); } catch (e) { } this.simpanBrand(baru, JSON.stringify(b)); }).catch(() => { }), b ? 4000 : 0);
   },
   simpanBrand(baru, lamaStr) {
     const s = JSON.stringify(baru);
@@ -472,17 +489,32 @@ var App = {
         '<div class="col"><div class="h-sm">GAS_URL belum diisi</div><div class="t-sm muted">Buka file <b>js/config.js</b>, tempel URL Web App Apps Script (berakhiran <b>/exec</b>), simpan, lalu unggah ulang ke GitHub. Lihat PANDUAN-INSTALASI.md.</div></div>');
       return;
     }
+    // Sesi login berlaku 30 hari (atau sampai menekan Keluar)
+    const ss = Sesi.get();
+    if (ss && ss.user && ss.t && Date.now() - ss.t > 30 * 86400000) { if (window.FBC) FBC.keluar(); this.keMasuk('Sesi berakhir, silakan masuk kembali.'); return; }
     this.render();
     if (API.modeFB()) { const pil = document.createElement('div'); pil.textContent = (typeof MODE_DATA !== 'undefined' && MODE_DATA === 'firebase') ? '' : 'Mode Firebase · uji'; if (pil.textContent) { pil.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:300;background:#1f2937;color:#fff;font-size:11px;font-weight:700;padding:5px 10px;border-radius:99px;opacity:.85;pointer-events:none'; document.body.appendChild(pil); } }
     if (Sesi.user() && !this.ruteQR()) setTimeout(() => API.panaskan(), 600); // ⚡ panaskan data menu di latar
     // Segarkan lagi saat aplikasi dibuka kembali dari latar belakang (HP)
     document.addEventListener('visibilitychange', () => { if (!document.hidden && Sesi.user()) API.panaskanNanti(); });
+    // Mode Firebase: periksa status akun & wajib ganti PIN langsung dari Firestore (tanpa antre di server)
+    if (Sesi.user() && API.modeFB() && FBC.aktif()) {
+      FBC.periksaSesi().then(r => {
+        const s = Sesi.get();
+        if (!r || !s || !s.user) return;
+        if (r.nonaktif) { FBC.keluar(); this.keMasuk('Akun dinonaktifkan. Hubungi admin PPU.'); return; }
+        const berubah = !!s.user.wajib_ganti_pin !== !!r.wajib_ganti_pin;
+        Sesi.set(Object.assign({}, s, { user: r }));
+        if (berubah) this.render();
+      }).catch(() => { });
+      return;
+    }
     // Periksa ulang sesi di latar belakang (akun dinonaktifkan / token kedaluwarsa)
     if (Sesi.user()) API.call('sesi', {}, { retry: 1 }).then(r => {
       const s = Sesi.get();
       if (s && r && r.user) {
         const berubah = s.user.wajib_ganti_pin !== r.user.wajib_ganti_pin;
-        Sesi.set({ token: s.token, user: r.user });
+        Sesi.set(Object.assign({}, s, { user: r.user }));
         if (berubah) this.render();
       }
     }).catch(() => { });

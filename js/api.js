@@ -113,6 +113,7 @@ const API = {
     });
     const p = (lokal ? jalankan() : this._kirim(action, data, opt)).then(d => {
       if (k) Simpan.set(k, d);
+      if (this.modeFB()) this.setelahAkun(action, data, d, lokal);
       if (TULIS[action]) { Simpan.basikan(TULIS[action]); if (!this.modeFB()) this.panaskanNanti(); }
       return d;
     });
@@ -126,11 +127,29 @@ const API = {
    * - tunggu sinyal kembali bila HP sedang offline,
    * - ID permintaan (rid) untuk aksi tulis → server tidak menyimpan dua kali saat dikirim ulang.
    */
+  /**
+   * Mode Firebase: setelah data akun diubah di perangkat ini, akun login Firebase ikut disamakan
+   * di latar (lewat server). Admin yang mengganti sandinya sendiri otomatis masuk ulang.
+   */
+  setelahAkun(action, data, hasil, lokal) {
+    data = data || {};
+    if (action === 'ganti_password' && window.FBC && FBC.langsung()) { const u = Sesi.user(); FBC.masukUlang('admin', u.id, data.baru); return; }
+    if (!lokal) return; // aksi lewat server: sudah disamakan di sana
+    const kirim = d => setTimeout(() => this._kirim('akun_sinkron', d, { retry: 3 }).catch(e => console.warn('[RuangLatih] sinkron akun login:', e.message)), 300);
+    if (action === 'umkm_simpan' && data.id_umkm) kirim({ umkm: [data.id_umkm] });
+    if (action === 'instruktur_simpan' && data.id_instruktur) kirim({ instruktur: [data.id_instruktur] });
+  },
+  // Aksi publik (tanpa login) — tidak perlu identitas
+  PUBLIK: { login: 1, branding: 1, qr_info: 1, qr_absen: 1 },
+
   async _kirim(action, data, opt) {
     const maks = opt.retry === undefined ? 4 : opt.retry;
     const tulis = !!TULIS[action] || opt.tulis;
     const rid = tulis ? (opt.rid || (Date.now().toString(36) + Math.random().toString(36).slice(2, 10))) : '';
-    const body = JSON.stringify({ action, token: Sesi.token(), data, rid: rid || undefined, mode: this.modeFB() ? 'firebase' : undefined });
+    // Login langsung Firebase: identitas dikirim sebagai ID token Firebase (diperiksa GAS)
+    let idt;
+    if (!this.PUBLIK[action] && window.FBC && FBC.langsung()) idt = await FBC.idToken(!!opt._idtBaru);
+    const body = JSON.stringify({ action, token: Sesi.token() || undefined, idt: idt || undefined, data, rid: rid || undefined, mode: this.modeFB() ? 'firebase' : undefined });
     const batas = LAMA[action] ? 330000 : (tulis ? 45000 : 30000);
     for (let n = 0; ; n++) {
       let j;
@@ -148,7 +167,8 @@ const API = {
       }
       if (j.busy && n < maks) { opt.onRetry && opt.onRetry(n + 1); await this.tidur(500 + Math.random() * 1500 * (n + 1)); continue; }
       if (!j.success) {
-        if (j.code === 'SESI') { Sesi.clear(); if (window.App) App.keMasuk('Sesi berakhir, silakan masuk kembali.'); }
+        if (j.code === 'SESI' && idt && !opt._idtBaru) return this._kirim(action, data, Object.assign({}, opt, { _idtBaru: 1, rid: rid || undefined })); // token diperbarui lalu coba sekali lagi
+        if (j.code === 'SESI') { Sesi.clear(); if (window.FBC) FBC.keluar(); if (window.App) App.keMasuk('Sesi berakhir, silakan masuk kembali.'); }
         if (j.code === 'GANTI_PIN' && window.App) App.render();
         const err = new Error(j.message || 'Terjadi kesalahan.');
         err.code = j.code;
