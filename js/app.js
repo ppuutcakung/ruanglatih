@@ -355,7 +355,7 @@ var App = {
       '<div class="me"><div class="av">' + esc(UI.inisial(u.nama)) + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(u.nama) + '</div><div class="t-xs muted">' + (admin ? 'Super Admin' : 'Instruktur') + '</div></div>' +
       '<button class="btn icon sm ghost" data-keluar title="Keluar" aria-label="Keluar">' + UI.ic('logout', 'sm') + '</button></div></aside>' +
       '<div class="main"><header class="topbar"><button class="btn icon ghost only-m" data-bukanav aria-label="Menu">' + UI.ic('menu') + '</button>' +
-      (admin ? '<form class="search input-ic" data-cari>' + UI.ic('search', 'sm') + '<input class="input" type="search" placeholder="Cari data peserta, materi, pelatihan…"></form>' : '<div class="grow"></div>') +
+      '<div class="grow"></div>' + // pencarian ada di dalam tab yang memerlukan (Peserta, Materi, dll.)
       '<span class="chip line hide-m" data-srv>' + UI.ic('refresh', 'sm') + 'Memeriksa server…</span>' +
       '<span class="chip hide-m">' + UI.ic('calendar', 'sm') + esc(UI.tglPendek(UI.hariIni())) + '</span></header><main class="content"><div data-hal></div><footer class="app-foot" data-foot>' + esc(APP_CONFIG.footer || '') + '</footer></main></div></div>';
     const d = $('.d-app', app);
@@ -365,8 +365,6 @@ var App = {
       else if (e.target.closest('[data-keluar]')) this.keluar();
       else if (e.target.closest('[data-bantuan]')) { e.preventDefault(); this.bantuan(); }
     };
-    const cari = $('[data-cari]', app);
-    if (cari) cari.onsubmit = e => { e.preventDefault(); const q = $('input', cari).value.trim(); location.hash = '#/cari/' + encodeURIComponent(q); };
     if (API.modeFB()) { this.statusSinkron(); return; } // mode Firebase: tidak perlu cek server berulang
     if (!admin) { const s = $('[data-srv]', app); if (s) s.remove(); return; }
     this.cekServer().then(h => {
