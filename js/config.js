@@ -22,3 +22,4 @@ const FIREBASE_CONFIG = {
   appId: '1:645604301604:web:99edcbec545e49cbeff1b1'
 };
    const MODE_DATA = 'firebase';
+   const ALAMAT_UTAMA = 'https://ruanglatih.vercel.app';
