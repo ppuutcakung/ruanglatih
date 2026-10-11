@@ -466,6 +466,13 @@ var App = {
   },
 
   mulai() {
+    // Alamat utama pindah (mis. ke Vercel): alamat lama GitHub Pages otomatis dialihkan — termasuk QR & tautan lama
+    if (typeof ALAMAT_UTAMA === 'string' && /^https:\/\//.test(ALAMAT_UTAMA) && /\.github\.io$/.test(location.hostname)) {
+      location.replace(ALAMAT_UTAMA.replace(/\/+$/, '') + '/' + location.hash);
+      return;
+    }
+    // Gambar yang gagal dimuat (mis. flyer terhapus) disembunyikan — tanpa skrip di dalam HTML (aman untuk header keamanan)
+    document.addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && t.hasAttribute('data-sembunyi-galat')) t.style.display = 'none'; }, true);
     ['online', 'offline'].forEach(ev => window.addEventListener(ev, () => { if (API.modeFB()) this.statusSinkron(); if (ev === 'online') UI.toast('Koneksi kembali — data disinkronkan.', 'info'); else UI.toast('Koneksi terputus — perubahan disimpan di perangkat dan dikirim otomatis.', 'info'); }));
     // Akun berganti / keluar di tab lain pada browser yang sama → tab ini ikut menyesuaikan
     window.addEventListener('storage', e => {

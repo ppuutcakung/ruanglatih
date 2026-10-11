@@ -82,7 +82,7 @@ const Peserta = {
             '<div class="meta t-sm mt8" style="font-size:12.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:2px"><span class="row g4">' + UI.ic('clock', 'sm') + esc(a.jam || '-') + '</span><span class="row g4">' + UI.ic(a.format === 'online' ? 'link' : 'pin', 'sm') + '<span class="clamp1">' + esc(a.format === 'online' ? 'Online' : a.lokasi) + '</span></span></div></div></a>';
         }).join('') + '</div>' : '<div class="card">' + UI.kosong('Belum ada agenda pelatihan. Admin PPU akan mendaftarkan Anda ke pelatihan berikutnya.', 'calendar') + '</div>') + '</section>' +
         (d.flyer.length ? '<section><div class="sec-h"><h2>Info Pelatihan</h2></div><div class="flyer-strip">' + d.flyer.map((f, i) =>
-          '<button class="flyer" data-flyer="' + i + '" style="text-align:left"><img src="' + esc(f.gambar) + '" alt="Flyer ' + esc(f.judul) + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' +
+          '<button class="flyer" data-flyer="' + i + '" style="text-align:left"><img src="' + esc(f.gambar) + '" alt="Flyer ' + esc(f.judul) + '" loading="lazy" referrerpolicy="no-referrer" data-sembunyi-galat>' +
           '<div class="cap"><span class="chip solid sm" style="margin-bottom:6px">' + UI.ic('megaphone', 'sm') + 'Info Pelatihan</span><div class="semi">' + esc(f.judul) + '</div><div class="t-xs" style="opacity:.85">' + esc(UI.tglPendek(String(f.tanggal).split(' ')[0])) + ' · Ketuk untuk detail</div></div></button>').join('') + '</div></section>' : '');
       $$('[data-flyer]', isi).forEach(b => b.onclick = () => {
         const f = d.flyer[+b.dataset.flyer];
