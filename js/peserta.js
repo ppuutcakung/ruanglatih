@@ -297,7 +297,7 @@ const Peserta = {
   tab_evaluasi(d) {
     const e = d.evaluasi;
     if (e.selesai) return '<div class="card">' + UI.kosong('Terima kasih! Evaluasi Anda sudah tersimpan.', 'checkCircle') + '</div>';
-    if (!e.buka) return '<div class="card">' + UI.kosong('Form evaluasi belum dibuka admin. Biasanya dibuka setelah post-test.', 'lock') + '</div>';
+    if (!e.buka) return '<div class="card">' + UI.kosong('Form evaluasi belum dibuka admin. Biasanya dibuka setelah post-test. Halaman ini terbuka otomatis begitu admin membukanya.', 'lock') + '</div>';
     return '<div class="card"><div class="row"><div class="ic-tile">' + UI.ic('edit') + '</div><div class="grow"><div class="h-sm">Evaluasi Pelatihan</div><div class="t-sm muted">Nilai materi, instruktur, dan penyelenggaraan. ±3 menit, hanya diisi 1 kali.</div></div></div>' +
       '<a class="btn primary block mt12" href="#/evaluasi/' + esc(d.pelatihan.id_pelatihan) + '">Isi Evaluasi</a></div>';
   },

@@ -926,7 +926,7 @@ const Admin = {
       };
       gambar();
     };
-    UI.klik(isi, new Proxy({}, { get: (_, k) => (isi._peta && isi._peta[k]) || (k === 'togel' ? b => this.aksiTogel(b, () => Kelola.segarkanPel()) : undefined) }));
+    UI.klik(isi, new Proxy({}, { get: (_, k) => (isi._peta && isi._peta[k]) || (k === 'togel' ? b => this.aksiTogel(b, v => { const t = b.closest('.card') && b.closest('.card').querySelector('.t-xs.muted'); if (t) t.textContent = v ? 'Sedang dibuka' : 'Ditutup'; }) : undefined) }));
     const jalan = () => { isi.oninput = isi.onchange = null; isi._peta = null; mode === 'hasil' ? hasil() : form(); };
     $('[data-mode]', el).onclick = e => { const b = e.target.closest('button'); if (!b) return; mode = b.dataset.v; $$('[data-mode] button', el).forEach(x => x.classList.toggle('on', x === b)); rebuildPicker(); };
     const rebuildPicker = async () => {

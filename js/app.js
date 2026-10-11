@@ -501,7 +501,12 @@ var App = {
     if (API.modeFB()) { const pil = document.createElement('div'); pil.textContent = (typeof MODE_DATA !== 'undefined' && MODE_DATA === 'firebase') ? '' : 'Mode Firebase · uji'; if (pil.textContent) { pil.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:300;background:#1f2937;color:#fff;font-size:11px;font-weight:700;padding:5px 10px;border-radius:99px;opacity:.85;pointer-events:none'; document.body.appendChild(pil); } }
     if (Sesi.user() && !this.ruteQR()) setTimeout(() => API.panaskan(), 600); // ⚡ panaskan data menu di latar
     // Segarkan lagi saat aplikasi dibuka kembali dari latar belakang (HP)
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && Sesi.user()) API.panaskanNanti(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden || !Sesi.user()) return;
+      API.panaskanNanti();
+      // Mode Firebase: HP kembali dari latar (layar mati / pindah aplikasi) → gambar ulang dengan data realtime terbaru
+      if (API.modeFB()) setTimeout(() => { Simpan.hapusSemua(); this.segarkanDiam(); }, 1200);
+    });
     // Mode Firebase: periksa status akun & wajib ganti PIN langsung dari Firestore (tanpa antre di server)
     if (Sesi.user() && API.modeFB() && FBC.aktif()) {
       FBC.periksaSesi().then(r => {
