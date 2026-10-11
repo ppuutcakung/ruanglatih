@@ -2,7 +2,7 @@
    RuangLatih — mesin.js  (DIBANGUN OTOMATIS — jangan diedit manual)
    Logika backend yang sama dengan GAS, dijalankan di browser di atas
    salinan data Firestore (mode Firebase). Sumber: Kode/Pelatihan/Admin/
-   Peserta/Laporan/Cermin.gs · dibangun 2026-10-10
+   Peserta/Laporan/Cermin.gs · dibangun 2026-10-11
    ============================================================= */
 var MESIN = (function () {
 
@@ -1094,7 +1094,8 @@ function aksiUploadInit(d, s) {
 }
 
 function aksiUploadChunk(d, s) {
-  const info = cacheGet('up_' + d.upload_id);
+  // Sesi unggah dibaca langsung dari cache server (cacheGet sengaja kosong di mode Firebase karena hanya untuk cache data)
+  const info = (() => { try { const v = CacheService.getScriptCache().get('up_' + d.upload_id); return v ? JSON.parse(v) : null; } catch (e) { return null; } })();
   if (!info || info.uid !== s.id) throw new Error('Sesi unggah tidak ditemukan atau kedaluwarsa. Ulangi unggah.');
   const bytes = Utilities.base64Decode(d.data);
   const offset = parseInt(d.offset, 10) || 0;

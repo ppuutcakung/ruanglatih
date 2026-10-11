@@ -109,7 +109,9 @@ const API = {
       if (!e || e.code !== 'FB_IZIN') throw e;
       FSD.izinDitolak.unshift({ action: action, waktu: new Date().toLocaleString('id-ID'), pesan: e.message });
       console.warn('[RuangLatih] ' + e.message + ' → diulang lewat server');
-      return this._kirim(action, data, opt);
+      const v = FSD._versi;
+      // setelah tersimpan lewat server, tunggu sebentar sampai data realtime ikut membawa perubahannya → tampilan tidak "hilang"
+      return this._kirim(action, data, opt).then(h => FSD.tungguSegar(v, 3000).then(() => h));
     });
     const p = (lokal ? jalankan() : this._kirim(action, data, opt)).then(d => {
       if (k) Simpan.set(k, d);
@@ -207,6 +209,7 @@ const API = {
 
   /** Ambil satu kali: pakai cache bila ada (segarkan diam-diam), atau tunggu server. */
   async cepat(action, data) {
+    if (this.modeFB() && window.FSD) return this.call(action, data); // Firebase: data perangkat selalu terbaru
     const c = Simpan.get(Simpan.kunci(action, data));
     if (c) { if (Date.now() - c.t > 15000) this.call(action, data).catch(() => { }); return c.d; }
     return this.call(action, data);

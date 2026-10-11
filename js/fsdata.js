@@ -8,7 +8,7 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '3.8', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '3.9', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
@@ -189,6 +189,11 @@ var FSD = {
     this._t = setTimeout(() => { Simpan.hapusSemua(); if (window.App && App.segarkanDiam) App.segarkanDiam(); }, 300);
   },
 
+  /** Tunggu sampai data realtime berubah dari versi v (maks ms milidetik). */
+  tungguSegar(v, ms) {
+    const t0 = Date.now();
+    return new Promise(res => { const cek = () => (this._versi !== v || Date.now() - t0 > ms) ? setTimeout(res, 350) : setTimeout(cek, 100); cek(); });
+  },
   berhenti() {
     this._off.forEach(f => { try { f(); } catch (e) { } });
     this._off = []; this.data = {}; this._src = {}; this._pel = {}; this._siap = null; this._uid = ''; this._aktif = false; this._logPenuh = null;

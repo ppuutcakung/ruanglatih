@@ -9,6 +9,7 @@ const Kelola = {
 
   /** Daftar pelatihan: langsung dari cache (instan), disegarkan diam-diam di latar. */
   async daftarPel(paksa) {
+    if (API.modeFB() && window.FSD) return API.call('pelatihan_list'); // Firebase: dihitung dari data realtime di perangkat (instan & selalu terbaru)
     const c = Simpan.get(Simpan.kunci('pelatihan_list', {}));
     if (c && !paksa) { if (Date.now() - c.t > 20000) API.call('pelatihan_list').catch(() => { }); return c.d; }
     return API.call('pelatihan_list');
@@ -41,7 +42,7 @@ const Kelola = {
   async pemilih(host, opt, onPilih) {
     opt = opt || {};
     const list = await this.daftarPel();
-    let id = opt.id !== undefined ? opt.id : (opt.semua && !sessionStorage.getItem('rl_pel') ? '' : this.pilihanAwal(list));
+    let id = opt.id !== undefined ? opt.id : (opt.semua && !opt.pilihAwal && !sessionStorage.getItem('rl_pel') ? '' : this.pilihanAwal(list));
     if (id && !list.some(p => p.id_pelatihan === id)) id = opt.semua ? '' : this.pilihanAwal(list);
     host.innerHTML = '<select class="select" aria-label="Pilih pelatihan">' + (opt.semua ? '<option value="">Semua pelatihan</option>' : '') +
       list.map(p => '<option value="' + esc(p.id_pelatihan) + '"' + (p.id_pelatihan === id ? ' selected' : '') + '>' + esc(p.judul) + ' · ' + esc(UI.rentang(p)) + '</option>').join('') + '</select>';
@@ -502,7 +503,8 @@ const Kelola = {
     UI.klik(el, peta);
     isi.addEventListener('click', e => { const b = e.target.closest('[data-tab] button'); if (b) { tab = b.dataset.v; gambar(); } });
     isi.addEventListener('input', e => { if (e.target.matches('[data-cari]')) { cari = e.target.value; const pos = e.target.selectionStart; gambar(); const c = $('[data-cari]', isi); c.focus(); c.setSelectionRange(pos, pos); } });
-    try { await this.pemilih($('[data-picker]', el), { semua: true }, id => { idPel = id; muat(); if (opt.atas) opt.atas($('[data-atas]', el), id); }); } catch (e) { UI.galat(isi, e, () => this.halamanTugas(el, opt)); }
+    // dibuka langsung pada pelatihan aktif (sakelar Tugas tampil & sama dengan dasbor); "Semua pelatihan" tetap bisa dipilih
+    try { await this.pemilih($('[data-picker]', el), { semua: true, pilihAwal: true }, id => { idPel = id; muat(); if (opt.atas) opt.atas($('[data-atas]', el), id); }); } catch (e) { UI.galat(isi, e, () => this.halamanTugas(el, opt)); }
   },
 
   itemKumpul(k, bolehNilai) {
