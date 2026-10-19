@@ -217,7 +217,7 @@ const Peserta = {
     return 'file';
   },
   kartuMateri(m, i) {
-    return '<div class="mat"><div class="cover tone-' + (i % 4) + '">' + UI.ic(this.ikonMateri(m.judul)) + '<span class="ext">PDF</span></div>' +
+    return '<div class="mat"><div class="cover tone-' + (i % 4) + '">' + UI.ic(m.jenis === 'excel' ? 'sheet' : this.ikonMateri(m.judul)) + '<span class="ext">' + (m.jenis === 'excel' ? 'XLSX' : 'PDF') + '</span></div>' +
       '<div class="semi t-sm clamp2" style="min-height:36px">' + esc(m.judul) + '</div><div class="t-xs muted row g4">' + UI.ic('file', 'sm') + UI.ukuran(m.ukuran) + '</div>' +
       '<div class="acts"><a class="btn xs secondary" href="' + esc(m.url_lihat) + '" target="_blank" rel="noopener">' + UI.ic('eye', 'sm') + 'Lihat</a><a class="btn xs primary" href="' + esc(m.url_unduh) + '" target="_blank" rel="noopener">' + UI.ic('download', 'sm') + 'Unduh</a></div></div>';
   },
@@ -239,26 +239,26 @@ const Peserta = {
       return '<div class="card"><div class="row between top"><div class="h-sm">' + esc(x.judul) + '</div>' +
         (k ? (k.dinilai ? '<span class="chip ok">Skor ' + UI.angka(k.skor) + '</span>' : '<span class="chip warn dot sm">Menunggu nilai</span>') : (x.lewat ? '<span class="chip bad sm">Terlewat</span>' : '<span class="chip line sm">Belum kumpul</span>')) + '</div>' +
         '<div class="t-sm muted mt8" style="white-space:pre-line">' + esc(x.instruksi) + '</div>' +
-        (x.nama_lampiran ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(/pdf/.test(x.tipe_lampiran) ? 'file' : 'image', 'sm') + '</div>' +
+        (x.nama_lampiran ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(UI.ikonBerkas(x.tipe_lampiran, x.nama_lampiran), 'sm') + '</div>' +
           '<div class="grow" style="min-width:0"><div class="semi t-sm clamp1">' + esc(x.nama_lampiran) + '</div><div class="t-xs muted">Lampiran dari instruktur</div></div></div>' +
           '<div class="row g8 mt8"><button class="btn sm outline grow" data-aksi="lampiran" data-id="' + esc(x.id_tugas) + '">' + UI.ic('eye', 'sm') + 'Lihat</button><button class="btn sm outline grow" data-aksi="lampiranU" data-id="' + esc(x.id_tugas) + '">' + UI.ic('download', 'sm') + 'Unduh</button></div></div>' : '') +
         (x.batas_waktu ? '<div class="t-xs mt8 row g4 ' + (x.lewat ? 'c-bad' : 'c-warn') + '">' + UI.ic('clock', 'sm') + 'Batas: ' + UI.waktu(x.batas_waktu) + '</div>' : '') +
-        (k ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(/pdf/.test(k.tipe_file) ? 'file' : 'image', 'sm') + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(k.nama_file) + '</div><div class="t-xs muted">Dikirim ' + UI.waktu(k.waktu) + '</div></div>' +
+        (k ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(UI.ikonBerkas(k.tipe_file, k.nama_file), 'sm') + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(k.nama_file) + '</div><div class="t-xs muted">Dikirim ' + UI.waktu(k.waktu) + '</div></div>' +
           '<div class="row g4"><button class="btn xs outline" data-aksi="lihat" data-id="' + esc(x.id_tugas) + '">' + UI.ic('eye', 'sm') + 'Lihat</button><button class="btn xs outline" data-aksi="unduhK" data-id="' + esc(x.id_tugas) + '">' + UI.ic('download', 'sm') + 'Unduh</button></div></div>' + (k.catatan ? '<div class="t-sm mt8"><b>Catatan instruktur:</b> ' + esc(k.catatan) + '</div>' : '') + '</div>' : '') +
-        (boleh && !k ? '<button class="btn primary block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + 'Unggah Tugas</button><div class="hint center mt8">Foto (kamera / galeri) atau PDF · maksimal 10 MB</div>' : '') +
+        (boleh && !k ? '<button class="btn primary block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + 'Unggah Tugas</button><div class="hint center mt8">Foto (kamera / galeri), PDF, atau Excel · maksimal 10 MB</div>' : '') +
         (boleh && k ? '<button class="btn danger block mt12" data-aksi="hapusK" data-id="' + esc(x.id_tugas) + '">' + UI.ic('trash', 'sm') + 'Hapus Kiriman</button><div class="hint center mt8">Salah berkas? Hapus kiriman ini, lalu unggah ulang berkas yang benar.</div>' : '') +
         (k && !k.dinilai && !boleh ? '<div class="hint center mt8">Kiriman tidak bisa diubah lagi (' + (x.lewat ? 'batas waktu sudah lewat' : 'pengumpulan sudah ditutup') + ').</div>' : '') + '</div>';
     }).join('');
   },
 
   async kumpulTugas(t, sesudah) {
-    // Foto (kamera/galeri, termasuk format WebP/HEIC bila bisa dibuka) atau PDF
-    const f = (await UI.pilihFile('image/*,application/pdf', false))[0];
+    // Foto (kamera/galeri, termasuk format WebP/HEIC bila bisa dibuka), PDF, atau Excel
+    const f = (await UI.pilihFile('image/*,application/pdf,' + UI.TERIMA_EXCEL, false))[0];
     if (!f) return;
     let file;
     if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) UI.toast('Memperkecil PDF… mohon tunggu sebentar.', 'info');
     try { file = await UI.siapkanBerkas(f, 10); } catch (e) { return UI.toast(e.message, 'bad'); }
-    const pratinjau = /^image/.test(file.type) ? '<img src="' + URL.createObjectURL(file) + '" alt="" style="width:100%;max-height:44vh;object-fit:contain;border-radius:12px;background:var(--blush-1)">' : '<div class="empty"><div class="ic-tile">' + UI.ic('file', 'lg') + '</div></div>';
+    const pratinjau = /^image/.test(file.type) ? '<img src="' + URL.createObjectURL(file) + '" alt="" style="width:100%;max-height:44vh;object-fit:contain;border-radius:12px;background:var(--blush-1)">' : '<div class="empty"><div class="ic-tile">' + UI.ic(UI.ikonBerkas(file.type, file.name), 'lg') + '</div><div class="semi t-sm">' + esc(file.name) + '</div></div>';
     const opts = {
       title: 'Kirim Tugas',
       body: '<div class="col"><div class="semi">' + esc(t.judul) + '</div>' + pratinjau + '<div class="t-sm muted center">' + esc(file.name) + ' · ' + UI.ukuran(file.size) + (file !== f ? ' (sudah diperkecil)' : '') + '</div><div class="err" hidden data-err></div></div>',

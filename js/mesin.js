@@ -2,7 +2,7 @@
    RuangLatih — mesin.js  (DIBANGUN OTOMATIS — jangan diedit manual)
    Logika backend yang sama dengan GAS, dijalankan di browser di atas
    salinan data Firestore (mode Firebase). Sumber: Kode/Pelatihan/Admin/
-   Peserta/Laporan/Cermin.gs · dibangun 2026-10-11
+   Peserta/Laporan/Cermin.gs · dibangun 2026-10-19
    ============================================================= */
 var MESIN = (function () {
 
@@ -50,7 +50,12 @@ const MAX_MATERI = 50 * MB;
 const MAX_TUGAS = 10 * MB;
 const MAX_GAMBAR = 5 * MB;
 const MAX_TEMPLATE = 20 * MB;
-const CHUNK = 4 * MB; // kelipatan 256 KB (syarat unggah bertahap Drive)
+const CHUNK = 4 * MB;
+// Jenis berkas yang diterima: foto, PDF, dan Excel (.xlsx / .xls)
+const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', MIME_XLS = 'application/vnd.ms-excel';
+const TIPE_BERKAS = /^(image\/(webp|jpeg|png)|application\/pdf|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|application\/vnd\.ms-excel)$/;
+/** Ekstensi berkas dari jenisnya. */
+function extBerkas(tipe) { return { 'application/pdf': '.pdf', 'image/png': '.png', 'image/webp': '.webp', [MIME_XLSX]: '.xlsx', [MIME_XLS]: '.xls' }[tipe] || '.jpg'; } // kelipatan 256 KB (syarat unggah bertahap Drive)
 
 // ============================================
 // KONFIGURASI — semua ID dibaca dari Script Properties
@@ -80,7 +85,7 @@ const SKEMA = {
   Admin: ['username', 'password_hash', 'nama'],
   Pelatihan: ['id_pelatihan', 'judul', 'tema', 'cakupan', 'sektor', 'id_instruktur', 'jumlah_hari', 'tanggal_mulai', 'tanggal_selesai', 'jam', 'format', 'lokasi_atau_link', 'kuota', 'status', 'id_flyer', 'status_aktivitas', 'syarat_lulus', 'id_template_sertifikat', 'tgl_dibuat', 'link_dokumentasi'],
   Peserta_Pelatihan: ['id_pelatihan', 'id_umkm', 'status_lulus', 'no_sertifikat', 'id_file_sertifikat', 'tgl_daftar', 'nama_peserta', 'gender_peserta', 'hp_peserta'],
-  Materi: ['id_materi', 'id_pelatihan', 'judul', 'cakupan', 'sektor', 'id_file', 'ukuran_file', 'urutan', 'diunggah_oleh', 'tgl'],
+  Materi: ['id_materi', 'id_pelatihan', 'judul', 'cakupan', 'sektor', 'id_file', 'ukuran_file', 'urutan', 'diunggah_oleh', 'tgl', 'tipe_file'],
   Bank_Soal: ['id_soal', 'id_pelatihan', 'jenis', 'pertanyaan', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'kunci', 'urutan'],
   Hasil_Tes: ['id_pelatihan', 'id_umkm', 'jenis', 'jawaban', 'jumlah_benar', 'skor', 'waktu_selesai'],
   Absensi: ['id_pelatihan', 'id_umkm', 'hari_ke', 'tanggal', 'waktu_absen', 'metode'],
@@ -1031,7 +1036,8 @@ function formatMateri(m, judulPel) {
   return {
     id_materi: m.id_materi, id_pelatihan: m.id_pelatihan, pelatihan: judulPel || '', judul: m.judul,
     cakupan: m.cakupan, sektor: m.sektor, ukuran: parseInt(m.ukuran_file, 10) || 0,
-    urutan: parseInt(m.urutan, 10) || 0, tgl: m.tgl, url_lihat: urlLihat(m.id_file), url_unduh: urlUnduh(m.id_file)
+    urutan: parseInt(m.urutan, 10) || 0, tgl: m.tgl, url_lihat: urlLihat(m.id_file), url_unduh: urlUnduh(m.id_file),
+    tipe: m.tipe_file || 'application/pdf', jenis: /sheet|excel/.test(m.tipe_file || '') ? 'excel' : 'pdf'
   };
 }
 function aksiMateriList(d, s) {
@@ -1071,25 +1077,28 @@ function aksiUploadInit(d, s) {
   if (tujuan !== 'materi') throw new Error('Tujuan unggah tidak dikenal.');
   const p = cekAkses(s, d.id_pelatihan);
   const ukuran = parseInt(d.ukuran, 10) || 0;
-  if (!/pdf/i.test(d.tipe || '') && !/\.pdf$/i.test(d.nama || '')) throw new Error('Materi harus berupa file PDF.');
+  const nama = String(d.nama || ''), tipeMasuk = String(d.tipe || '');
+  const excel = /\.xlsx?$/i.test(nama) || /spreadsheetml|ms-excel/i.test(tipeMasuk);
+  if (!excel && !/pdf/i.test(tipeMasuk) && !/\.pdf$/i.test(nama)) throw new Error('Materi harus berupa file PDF atau Excel (.xlsx / .xls).');
+  const mime = excel ? (/\.xls$/i.test(nama) || /ms-excel/i.test(tipeMasuk) ? MIME_XLS : MIME_XLSX) : 'application/pdf';
   if (ukuran <= 0) throw new Error('File kosong.');
   if (ukuran > MAX_MATERI) throw new Error('Ukuran file maksimal 50 MB.');
-  const judul = wajib(d.judul || String(d.nama).replace(/\.pdf$/i, ''), 'Judul materi wajib diisi.');
+  const judul = wajib(d.judul || nama.replace(/\.(pdf|xlsx?)$/i, ''), 'Judul materi wajib diisi.');
   const cakupan = d.cakupan === 'sektor' ? 'sektor' : (d.cakupan === 'umum' ? 'umum' : (p.cakupan === 'sektor' ? 'sektor' : 'umum'));
   const sektor = cakupan === 'sektor' ? (d.sektor || p.sektor) : '';
   if (cakupan === 'sektor' && SEKTOR.indexOf(sektor) < 0) throw new Error('Pilih sektor materi.');
 
   const res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
     method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': 'application/pdf', 'X-Upload-Content-Length': String(ukuran) },
-    payload: JSON.stringify({ name: p.id_pelatihan + ' - ' + judul + '.pdf', parents: [CONFIG.FOLDER_MATERI] })
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': mime, 'X-Upload-Content-Length': String(ukuran) },
+    payload: JSON.stringify({ name: p.id_pelatihan + ' - ' + judul + extBerkas(mime), parents: [CONFIG.FOLDER_MATERI] })
   });
   if (res.getResponseCode() !== 200) throw new Error('Gagal membuka sesi unggah Drive (' + res.getResponseCode() + ').');
   const h = res.getAllHeaders();
   const loc = h.Location || h.location || Object.keys(h).filter(k => k.toLowerCase() === 'location').map(k => h[k])[0];
   if (!loc) throw new Error('Drive tidak mengembalikan alamat unggah.');
   const id = genId('UP');
-  cachePut('up_' + id, { loc: loc, ukuran: ukuran, id_pelatihan: p.id_pelatihan, judul: judul, cakupan: cakupan, sektor: sektor, uid: s.id }, 21600);
+  cachePut('up_' + id, { loc: loc, ukuran: ukuran, id_pelatihan: p.id_pelatihan, judul: judul, cakupan: cakupan, sektor: sektor, uid: s.id, tipe: mime }, 21600);
   return { upload_id: id, chunk: CHUNK };
 }
 
@@ -1101,7 +1110,7 @@ function aksiUploadChunk(d, s) {
   const offset = parseInt(d.offset, 10) || 0;
   const akhir = offset + bytes.length - 1;
   const res = UrlFetchApp.fetch(info.loc, {
-    method: 'put', contentType: 'application/pdf', payload: bytes, muteHttpExceptions: true, followRedirects: false,
+    method: 'put', contentType: info.tipe || 'application/pdf', payload: bytes, muteHttpExceptions: true, followRedirects: false,
     headers: { 'Content-Range': 'bytes ' + offset + '-' + akhir + '/' + info.ukuran }
   });
   const code = res.getResponseCode();
@@ -1120,7 +1129,7 @@ function aksiUploadChunk(d, s) {
     const urut = DB.filter('Materi', x => x.id_pelatihan === info.id_pelatihan).length + 1;
     const m = {
       id_materi: genId('MAT'), id_pelatihan: info.id_pelatihan, judul: info.judul, cakupan: info.cakupan,
-      sektor: info.sektor, id_file: fileId, ukuran_file: info.ukuran, urutan: urut, diunggah_oleh: s.n, tgl: now()
+      sektor: info.sektor, id_file: fileId, ukuran_file: info.ukuran, urutan: urut, diunggah_oleh: s.n, tgl: now(), tipe_file: info.tipe || 'application/pdf'
     };
     DB.insert('Materi', m);
     cacheDel(['materi_semua']);
@@ -1286,7 +1295,7 @@ function aksiTugasNilai(d, s) {
   });
 }
 /**
- * Lampiran tugas dari instruktur/admin (PDF / gambar, maks 10 MB) → Google Drive folder Tugas/<pelatihan>/Lampiran.
+ * Lampiran tugas dari instruktur/admin (PDF / gambar / Excel, maks 10 MB) → Google Drive folder Tugas/<pelatihan>/Lampiran.
  * d.hapus = true untuk menghapus lampiran.
  */
 function aksiTugasLampiran(d, s) {
@@ -1300,7 +1309,7 @@ function aksiTugasLampiran(d, s) {
     return { message: 'Lampiran tugas dihapus.' };
   }
   const f = d.file || {}, tipe = String(f.tipe || '');
-  if (!/^(image\/(webp|jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('Lampiran harus PDF atau gambar (WebP/JPG/PNG).');
+  if (!TIPE_BERKAS.test(tipe)) throw new Error('Lampiran harus PDF, gambar (WebP/JPG/PNG), atau Excel (.xlsx/.xls).');
   const bytes = Utilities.base64Decode(f.data || '');
   if (!bytes.length) throw new Error('File lampiran kosong.');
   if (bytes.length > MAX_TUGAS) throw new Error('Ukuran lampiran maksimal 10 MB.');
@@ -2139,12 +2148,12 @@ function aksiPKumpulTugas(d, s) {
   if (lama) throw new Error('Anda sudah mengirim berkas untuk tugas ini. Hapus kiriman lama terlebih dahulu bila ingin mengunggah ulang.');
   const f = d.file || {};
   const tipe = String(f.tipe || '');
-  if (!/^(image\/(webp|jpeg|png)|application\/pdf)$/.test(tipe)) throw new Error('File harus foto (WebP/JPG/PNG) atau PDF.');
+  if (!TIPE_BERKAS.test(tipe)) throw new Error('File harus foto (WebP/JPG/PNG), PDF, atau Excel (.xlsx/.xls).');
   const bytes = Utilities.base64Decode(f.data || '');
   if (!bytes.length) throw new Error('File kosong.');
   if (bytes.length > MAX_TUGAS) throw new Error('Ukuran file maksimal 10 MB.');
 
-  const ext = tipe === 'application/pdf' ? '.pdf' : (tipe === 'image/png' ? '.png' : '.jpg');
+  const ext = extBerkas(tipe);
   const namaFile = (s.u || s.id) + ' - ' + t.judul + ext;
   const dir = subFolder(CONFIG.FOLDER_TUGAS, p.id_pelatihan);
   const file = dir.createFile(Utilities.newBlob(bytes, tipe, namaFile));
@@ -2902,7 +2911,7 @@ var CERMIN = {
         }
         case 'Materi':
           if (op.jenis === 'remove') hapus('materi', r.id_materi);
-          else set('materi', r.id_materi, { id_materi: r.id_materi, id_pelatihan: r.id_pelatihan, judul: r.judul, cakupan: r.cakupan, sektor: r.sektor, id_file: r.id_file, ukuran: n(r.ukuran_file) || 0, urutan: n(r.urutan) || 0, diunggah_oleh: r.diunggah_oleh, tgl: r.tgl });
+          else set('materi', r.id_materi, { id_materi: r.id_materi, id_pelatihan: r.id_pelatihan, judul: r.judul, cakupan: r.cakupan, sektor: r.sektor, id_file: r.id_file, ukuran: n(r.ukuran_file) || 0, urutan: n(r.urutan) || 0, diunggah_oleh: r.diunggah_oleh, tgl: r.tgl, tipe_file: r.tipe_file || 'application/pdf' });
           break;
         case 'Bank_Soal':
           if (op.jenis === 'remove') { hapus('soal', r.id_soal); ubah('kunci_soal', r.id_pelatihan, [[['kunci', r.id_soal], HAPUS]]); break; }

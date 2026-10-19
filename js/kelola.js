@@ -1,7 +1,7 @@
 /* =============================================================
    RuangLatih — kelola.js
    Modul bersama Admin & Instruktur: pemilih pelatihan, bank
-   materi (unggah PDF bertahap), bank soal, tugas & penilaian,
+   materi (unggah PDF / Excel bertahap), bank soal, tugas & penilaian,
    rekap nilai. Hak akses tetap diperiksa di server.
    ============================================================= */
 const Kelola = {
@@ -62,7 +62,7 @@ const Kelola = {
   // BANK MATERI
   // ===========================================================
   async halamanMateri(el) {
-    el.innerHTML = this.kepala('Bank Materi', 'Modul PDF pelatihan · tersimpan di Google Drive', '<span data-picker></span><button class="btn primary sm" data-aksi="unggah">' + UI.ic('upload', 'sm') + 'Unggah PDF</button>') + '<div data-isi></div>';
+    el.innerHTML = this.kepala('Bank Materi', 'Modul PDF & Excel pelatihan · tersimpan di Google Drive', '<span data-picker></span><button class="btn primary sm" data-aksi="unggah">' + UI.ic('upload', 'sm') + 'Unggah Materi</button>') + '<div data-isi></div>';
     const isi = $('[data-isi]', el);
     let idPel = '', pel = null;
     let rows = [];
@@ -74,14 +74,14 @@ const Kelola = {
     };
     const gambar = () => {
       {
-        if (!rows.length) { isi.innerHTML = '<div class="card">' + UI.kosong(idPel ? 'Belum ada materi untuk pelatihan ini. Unggah PDF modul pertama.' : 'Belum ada materi.', 'book') + '</div>'; return; }
+        if (!rows.length) { isi.innerHTML = '<div class="card">' + UI.kosong(idPel ? 'Belum ada materi untuk pelatihan ini. Unggah modul PDF atau Excel pertama.' : 'Belum ada materi.', 'book') + '</div>'; return; }
         const total = rows.reduce((s, m) => s + m.ukuran, 0);
         isi.innerHTML = '<div class="grid g3"><div class="card stat"><span class="l">Jumlah modul</span><span class="v">' + rows.length + '</span></div>' +
           '<div class="card stat"><span class="l">Total ukuran</span><span class="v">' + UI.ukuran(total) + '</span></div>' +
           '<div class="card stat"><span class="l">Cakupan umum</span><span class="v">' + rows.filter(m => m.cakupan === 'umum').length + '</span></div></div>' +
           '<div class="card mt20"><div class="list">' + rows.map(m =>
-            '<div class="item"><div class="ic-tile">' + UI.ic('file') + '</div><div class="grow"><div class="semi clamp1">' + esc(m.judul) + '</div>' +
-            '<div class="meta"><span>' + UI.ukuran(m.ukuran) + '</span><span>' + esc(m.cakupan === 'sektor' ? 'Sektor ' + m.sektor : 'Umum') + '</span>' + (idPel ? '' : '<span>' + esc(m.pelatihan) + '</span>') + '<span>' + UI.tglPendek(m.tgl) + '</span></div></div>' +
+            '<div class="item"><div class="ic-tile">' + UI.ic(m.jenis === 'excel' ? 'sheet' : 'file') + '</div><div class="grow"><div class="semi clamp1">' + esc(m.judul) + '</div>' +
+            '<div class="meta"><span class="chip sm ' + (m.jenis === 'excel' ? 'ok' : 'line') + '">' + (m.jenis === 'excel' ? 'Excel' : 'PDF') + '</span><span>' + UI.ukuran(m.ukuran) + '</span><span>' + esc(m.cakupan === 'sektor' ? 'Sektor ' + m.sektor : 'Umum') + '</span>' + (idPel ? '' : '<span>' + esc(m.pelatihan) + '</span>') + '<span>' + UI.tglPendek(m.tgl) + '</span></div></div>' +
             '<div class="row g4"><a class="btn icon sm secondary" href="' + esc(m.url_lihat) + '" target="_blank" rel="noopener" title="Lihat">' + UI.ic('eye', 'sm') + '</a>' +
             '<button class="btn icon sm danger" data-aksi="hapus" data-id="' + esc(m.id_materi) + '" data-j="' + esc(m.judul) + '" title="Hapus">' + UI.ic('trash', 'sm') + '</button></div></div>').join('') + '</div></div>';
       }
@@ -103,9 +103,9 @@ const Kelola = {
   modalUnggah(pel, selesai) {
     let files = [];
     const opts = {
-      title: 'Unggah Materi PDF', wide: true,
+      title: 'Unggah Materi (PDF / Excel)', wide: true,
       body: '<div class="col g20"><div class="t-sm muted">Pelatihan: <b>' + esc(pel.judul) + '</b></div>' +
-        '<div class="dropzone" data-pilih>' + UI.ic('upload', 'lg') + '<div class="semi">Pilih file PDF</div><div class="hint">Boleh beberapa file sekaligus · maksimal 50 MB per file · diunggah bertahap</div></div>' +
+        '<div class="dropzone" data-pilih>' + UI.ic('upload', 'lg') + '<div class="semi">Pilih file PDF atau Excel</div><div class="hint">PDF (.pdf) atau Excel (.xlsx / .xls) · boleh beberapa file sekaligus · maksimal 50 MB per file · diunggah bertahap</div></div>' +
         '<div class="list" data-daftar></div>' +
         '<div class="form-grid"><div class="field"><label>Cakupan materi</label><div class="seg" data-cak><button type="button" data-v="umum">Umum (semua sektor)</button><button type="button" data-v="sektor">Khusus sektor</button></div></div>' +
         '<div class="field" data-sek><label>Sektor</label><select class="select">' + SEKTOR.map(s => '<option' + (s === pel.sektor ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div></div>' +
@@ -119,19 +119,21 @@ const Kelola = {
     segCak();
     $('[data-cak]', m.el).onclick = e => { const b = e.target.closest('button'); if (b) { cakupan = b.dataset.v; segCak(); } };
     const gambar = () => {
-      daftar.innerHTML = files.map((f, i) => '<div class="item" data-i="' + i + '"><div class="ic-tile sm">' + UI.ic('file', 'sm') + '</div><div class="grow col g4">' +
+      daftar.innerHTML = files.map((f, i) => '<div class="item" data-i="' + i + '"><div class="ic-tile sm">' + UI.ic(UI.apaExcel(f.file) ? 'sheet' : 'file', 'sm') + '</div><div class="grow col g4">' +
         '<input class="input" style="height:40px" value="' + esc(f.judul) + '" data-judul="' + i + '" aria-label="Judul materi">' +
         '<div class="row"><span class="t-xs muted">' + esc(f.file.name) + ' · ' + UI.ukuran(f.file.size) + '</span><div class="bar grow" hidden><i style="width:0"></i></div><span class="t-xs semi c-primary" data-pct></span></div></div>' +
         '<button class="btn icon sm ghost" data-buang="' + i + '" aria-label="Buang">' + UI.ic('x', 'sm') + '</button></div>').join('');
       kirim.disabled = !files.length;
     };
     $('[data-pilih]', m.el).onclick = async () => {
-      const pilih = await UI.pilihFile('application/pdf,.pdf', true);
+      const pilih = await UI.pilihFile('application/pdf,.pdf,' + UI.TERIMA_EXCEL, true);
       const tolak = [];
       pilih.forEach(f => {
-        if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) tolak.push(f.name + ': bukan PDF');
+        const excel = UI.apaExcel(f);
+        if (!excel && !/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) tolak.push(f.name + ': bukan PDF atau Excel');
+        else if (excel && f.size > 50 * 1048576) tolak.push(f.name + ': terlalu besar (maks 50 MB)');
         else if (f.size > 200 * 1048576) tolak.push(f.name + ': terlalu besar (maks 50 MB setelah diperkecil)');
-        else files.push({ file: f, judul: f.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim() });
+        else files.push({ file: excel ? UI.keExcel(f) : f, kecil: excel, judul: f.name.replace(/\.(pdf|xlsx?)$/i, '').replace(/[_-]+/g, ' ').trim() });
       });
       err.hidden = !tolak.length; err.innerHTML = tolak.map(esc).join('<br>');
       gambar();
@@ -154,7 +156,7 @@ const Kelola = {
             files[i].file = r.file; files[i].kecil = true;
             if (r.metode !== 'asli') $('.t-xs.muted', row).textContent = files[i].file.name + ' · ' + PDFKECIL.ringkas(r);
           }
-          if (files[i].file.size > 50 * 1048576) throw new Error('Masih ' + UI.ukuran(files[i].file.size) + ' setelah diperkecil (maks 50 MB) — pecah menjadi beberapa PDF');
+          if (files[i].file.size > 50 * 1048576) throw new Error(UI.apaExcel(files[i].file) ? 'Ukuran ' + UI.ukuran(files[i].file.size) + ' (maks 50 MB)' : 'Masih ' + UI.ukuran(files[i].file.size) + ' setelah diperkecil (maks 50 MB) — pecah menjadi beberapa PDF');
           await API.unggahBesar(files[i].file, { id_pelatihan: pel.id_pelatihan, judul: files[i].judul, cakupan: cakupan, sektor: sektor }, p => { $('i', bar).style.width = p + '%'; pct.textContent = p + '%'; });
           pct.innerHTML = UI.ic('check', 'sm'); ok++;
         } catch (e) { pct.textContent = 'Gagal'; gagal.push(files[i].file.name + ': ' + e.message); }
@@ -424,7 +426,7 @@ const Kelola = {
         '<div class="card"><div class="card-h"><div class="h-sm">Daftar Tugas</div></div>' +
         (data.tugas.length ? '<div class="list">' + data.tugas.map(t => '<div class="item" style="align-items:flex-start"><div class="ic-tile sm">' + UI.ic('clipboard', 'sm') + '</div><div class="grow"><div class="semi">' + esc(t.judul) + '</div>' +
           '<div class="t-sm muted clamp2">' + esc(t.instruksi) + '</div>' +
-          (t.nama_lampiran ? '<div class="row wrap g8 mt8" style="align-items:center"><span class="chip line sm">' + UI.ic(/pdf/.test(t.tipe_lampiran || t.nama_lampiran) ? 'file' : 'image', 'sm') + esc(t.nama_lampiran) + (t._unggah ? ' · mengunggah…' : '') + '</span>' +
+          (t.nama_lampiran ? '<div class="row wrap g8 mt8" style="align-items:center"><span class="chip line sm">' + UI.ic(UI.ikonBerkas(t.tipe_lampiran, t.nama_lampiran), 'sm') + esc(t.nama_lampiran) + (t._unggah ? ' · mengunggah…' : '') + '</span>' +
             (t._unggah ? '' : '<button class="btn xs outline" data-aksi="lampiranT" data-id="' + esc(t.id_tugas) + '">' + UI.ic('eye', 'sm') + 'Lihat</button><button class="btn xs outline" data-aksi="lampiranU" data-id="' + esc(t.id_tugas) + '">' + UI.ic('download', 'sm') + 'Unduh</button>') + '</div>' : '') + '<div class="meta mt8">' + (idPel ? '' : '<span>' + esc(t.pelatihan) + '</span>') + '<span>' + UI.ic('clock', 'sm') + (t.batas_waktu ? 'Batas ' + UI.waktu(t.batas_waktu) : 'Tanpa batas waktu') + '</span><span>' + t.jumlah_kumpul + ' terkumpul</span></div></div>' +
           '<div class="row g4"><button class="btn icon sm secondary" data-aksi="ubahT" data-id="' + t.id_tugas + '" title="Ubah">' + UI.ic('edit', 'sm') + '</button><button class="btn icon sm danger" data-aksi="hapusT" data-id="' + t.id_tugas + '" title="Hapus">' + UI.ic('trash', 'sm') + '</button></div></div>').join('') + '</div>'
           : UI.kosong('Belum ada tugas.', 'clipboard')) + '</div></div>';
@@ -443,19 +445,19 @@ const Kelola = {
         title: t.id_tugas ? 'Ubah Tugas' : 'Buat Tugas', submit: 'Simpan Tugas',
         fields: [
           { name: 'judul', label: 'Judul tugas', value: t.judul, full: true, placeholder: 'mis. Foto katalog 3 produk unggulan' },
-          { name: 'instruksi', label: 'Instruksi', type: 'textarea', value: t.instruksi, placeholder: 'Jelaskan apa yang harus dikumpulkan peserta (JPG/PNG/PDF, maks 10 MB).' },
+          { name: 'instruksi', label: 'Instruksi', type: 'textarea', value: t.instruksi, placeholder: 'Jelaskan apa yang harus dikumpulkan peserta (foto / PDF / Excel, maks 10 MB).' },
           { name: 'batas_waktu', label: 'Batas waktu (opsional)', type: 'datetime-local', value: String(t.batas_waktu || '').slice(0, 16).replace(' ', 'T'), full: true },
           { name: 'lampiran', label: 'Lampiran tugas (opsional)', type: 'html', full: true,
-            html: '<div class="row wrap g8" style="align-items:center"><button type="button" class="btn secondary sm" data-pilihlamp>' + UI.ic('upload', 'sm') + 'Pilih PDF / Gambar</button>' +
+            html: '<div class="row wrap g8" style="align-items:center"><button type="button" class="btn secondary sm" data-pilihlamp>' + UI.ic('upload', 'sm') + 'Pilih PDF / Gambar / Excel</button>' +
               '<span class="t-sm" data-namalamp></span><button type="button" class="btn ghost sm" data-hapuslamp hidden>' + UI.ic('x', 'sm') + 'Hapus</button></div>',
-            hint: 'Contoh format, panduan, atau contoh hasil. PDF atau gambar (otomatis diubah ke WebP) · maks 10 MB · dapat dibuka peserta di Ruang Pelatihan.' }
+            hint: 'Contoh format, panduan, template, atau contoh hasil. PDF, gambar (otomatis diubah ke WebP), atau Excel (.xlsx/.xls) · maks 10 MB · dapat dibuka peserta di Ruang Pelatihan.' }
         ],
         onOpen: (m, form) => {
           const nm = $('[data-namalamp]', form), hp = $('[data-hapuslamp]', form);
           const segar = () => { nm.innerHTML = labelLamp(); hp.hidden = !(lamp.file || (t.nama_lampiran && !lamp.hapus)); };
           segar();
           $('[data-pilihlamp]', form).onclick = async () => {
-            const f = (await UI.pilihFile('application/pdf,image/*', false))[0];
+            const f = (await UI.pilihFile('application/pdf,image/*,' + UI.TERIMA_EXCEL, false))[0];
             if (!f) return;
             try { nm.innerHTML = '<span class="spin" style="width:12px;height:12px"></span> Menyiapkan berkas…'; lamp = { file: await UI.siapkanBerkas(f, 10, t => { nm.textContent = t; }) }; segar(); } catch (e) { segar(); UI.gagal(e); }
           };
@@ -508,7 +510,7 @@ const Kelola = {
   },
 
   itemKumpul(k, bolehNilai) {
-    const ikon = /pdf/.test(k.tipe_file) ? 'file' : 'image';
+    const ikon = UI.ikonBerkas(k.tipe_file, k.nama_file);
     return '<div class="item" style="align-items:flex-start;flex-wrap:wrap"><div class="ic-tile">' + UI.ic(ikon) + '</div><div class="grow" style="min-width:180px">' +
       '<div class="row g8 wrap"><span class="semi">' + esc(k.nama_umkm) + '</span>' + (k.sektor ? '<span class="chip sm">' + esc(k.sektor.toUpperCase()) + '</span>' : '') + '</div>' +
       '<div class="t-sm c-primary clamp1">' + UI.ic('link', 'sm') + ' ' + esc(k.nama_file || 'Berkas tugas') + '</div>' +

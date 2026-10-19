@@ -24,6 +24,7 @@ const IKON = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>',
+  sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
   fileQ: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2.2-2.4 3.2M12 17h.01"/>',
   star: '<path d="m12 3 2.9 5.9 6.1.9-4.5 4.3 1.1 6.1L12 17.3l-5.6 2.9 1.1-6.1L3 9.8l6.1-.9z"/>',
@@ -331,10 +332,23 @@ const UI = {
    * Siapkan berkas unggahan tugas/lampiran: PDF apa adanya; foto apa pun diubah ke WebP & diperkecil.
    * Hasil: File PDF / WebP (atau JPG di browser lama) ≤ maksMB.
    */
+  // ---------- Excel (.xlsx / .xls) ----------
+  EXCEL: { xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel' },
+  TERIMA_EXCEL: '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
+  apaExcel(f) { return /\.xlsx?$/i.test((f && (f.name || f.nama)) || '') || /spreadsheetml|ms-excel/i.test((f && (f.type || f.tipe)) || ''); },
+  /** Jenis berkas Excel dipastikan benar (HP Android sering mengirim jenis kosong). */
+  keExcel(f) { const t = /\.xls$/i.test(f.name) ? UI.EXCEL.xls : UI.EXCEL.xlsx; return f.type === t ? f : new File([f], f.name, { type: t }); },
+  /** Ikon sesuai jenis berkas: Excel → sheet, PDF → file, selain itu gambar. */
+  ikonBerkas(tipe, nama) { const x = String(tipe || '') + ' ' + String(nama || ''); return /sheet|excel|\.xlsx?\b/i.test(x) ? 'sheet' : /pdf/i.test(x) ? 'file' : 'image'; },
+
   async siapkanBerkas(file, maksMB, progres) {
     maksMB = maksMB || 10;
+    if (UI.apaExcel(file)) { // Excel dikirim apa adanya (tidak diubah)
+      if (file.size > maksMB * 1048576) throw new Error('Ukuran file Excel maksimal ' + maksMB + ' MB.');
+      return UI.keExcel(file);
+    }
     const pdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
-    if (!pdf && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) throw new Error('Berkas harus berupa foto atau PDF.');
+    if (!pdf && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) throw new Error('Berkas harus berupa foto, PDF, atau Excel (.xlsx/.xls).');
     let hasil = file;
     if (pdf) {
       if (file.size > maksMB * 4 * 1048576) throw new Error('PDF terlalu besar (maks ' + maksMB + ' MB setelah diperkecil).');
@@ -347,6 +361,28 @@ const UI = {
     } else hasil = await UI.keWebp(file);
     if (hasil.size > maksMB * 1048576) throw new Error('Ukuran berkas maksimal ' + maksMB + ' MB' + (pdf ? ' (sudah diperkecil, masih ' + UI.ukuran(hasil.size) + '). Pecah PDF menjadi beberapa bagian.' : '.'));
     return hasil;
+  },
+  /** Tampilkan isi Excel sebagai tabel (per sheet, maks 300 baris × 40 kolom). */
+  async pratinjauExcel(blob, host, nama) {
+    UI.loading(host, 3);
+    const cadangan = () => { host.innerHTML = '<div class="empty"><div class="ic-tile">' + UI.ic('sheet', 'lg') + '</div><div class="semi">' + esc(nama || 'Berkas Excel') + '</div><div class="t-sm">' + UI.ukuran(blob.size) + ' · pratinjau tidak tersedia, silakan unduh untuk membuka di Excel.</div></div>'; };
+    try {
+      if (!window.XLSX) await UI.muatSkrip('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+      const wb = XLSX.read(new Uint8Array(await blob.arrayBuffer()), { type: 'array', cellDates: true });
+      const nm = wb.SheetNames.slice(0, 12);
+      if (!nm.length) return cadangan();
+      const tabel = i => {
+        const baris = XLSX.utils.sheet_to_json(wb.Sheets[nm[i]], { header: 1, defval: '', raw: false, blankrows: false });
+        if (!baris.length) return UI.kosong('Sheet ini kosong.', 'sheet');
+        const kol = Math.min(40, Math.max.apply(null, baris.slice(0, 300).map(r => r.length)));
+        return '<div style="overflow:auto;max-height:60vh;border:1px solid var(--blush-2);border-radius:12px"><table class="tbl" style="min-width:100%"><tbody>' +
+          baris.slice(0, 300).map((r, j) => '<tr>' + Array.from({ length: kol }, (_, c) => (j === 0 ? '<th style="position:sticky;top:0;background:var(--blush-1);white-space:nowrap">' : '<td style="white-space:nowrap">') + esc(String(r[c] === undefined ? '' : r[c])) + (j === 0 ? '</th>' : '</td>')).join('') + '</tr>').join('') +
+          '</tbody></table></div>' + (baris.length > 300 ? '<div class="t-xs muted mt8">Menampilkan 300 baris pertama dari ' + baris.length + '. Unduh untuk melihat semuanya.</div>' : '');
+      };
+      host.innerHTML = (nm.length > 1 ? '<div class="seg" data-sheet style="margin-bottom:12px">' + nm.map((n, i) => '<button type="button" data-v="' + i + '" class="' + (i ? '' : 'on') + '">' + esc(n) + '</button>').join('') + '</div>' : '') + '<div data-tabel>' + tabel(0) + '</div>';
+      const seg = $('[data-sheet]', host);
+      if (seg) seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; $$('button', seg).forEach(x => x.classList.toggle('on', x === b)); $('[data-tabel]', host).innerHTML = tabel(+b.dataset.v); };
+    } catch (e) { cadangan(); }
   },
   base64KeBlob(o) {
     const bin = atob(o.data), n = bin.length, u = new Uint8Array(n);
@@ -371,6 +407,15 @@ const UI = {
   lihatBerkas(o, judul) {
     const blob = UI.base64KeBlob(o);
     const url = URL.createObjectURL(blob);
+    if (UI.apaExcel(o)) { // Excel: pratinjau tabel langsung di aplikasi
+      const m = UI.modal({
+        title: judul || o.nama, wide: true, body: '<div data-xl></div>',
+        foot: '<a class="btn primary" href="' + url + '" download="' + esc(o.nama) + '">' + UI.ic('download', 'sm') + 'Unduh Excel</a>',
+        onClose: () => setTimeout(() => URL.revokeObjectURL(url), 30000)
+      });
+      UI.pratinjauExcel(blob, $('[data-xl]', m.el), o.nama);
+      return;
+    }
     const gambar = /^image\//.test(o.tipe);
     const pdf = /pdf/.test(o.tipe);
     const isi = gambar ? '<img src="' + url + '" alt="" style="width:100%;border-radius:12px;background:var(--blush-1)">'
