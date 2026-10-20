@@ -2,7 +2,7 @@
    RuangLatih — mesin.js  (DIBANGUN OTOMATIS — jangan diedit manual)
    Logika backend yang sama dengan GAS, dijalankan di browser di atas
    salinan data Firestore (mode Firebase). Sumber: Kode/Pelatihan/Admin/
-   Peserta/Laporan/Cermin.gs · dibangun 2026-10-19
+   Peserta/Laporan/Cermin.gs · dibangun 2026-10-20
    ============================================================= */
 var MESIN = (function () {
 
@@ -51,11 +51,13 @@ const MAX_TUGAS = 10 * MB;
 const MAX_GAMBAR = 5 * MB;
 const MAX_TEMPLATE = 20 * MB;
 const CHUNK = 4 * MB;
-// Jenis berkas yang diterima: foto, PDF, dan Excel (.xlsx / .xls)
+// Jenis berkas yang diterima di Tugas (lampiran & kiriman): foto, PDF, Excel (.xlsx/.xls), Word (.docx/.doc)
+// (Bank Materi: PDF & Excel — diperiksa di siapMateri)
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', MIME_XLS = 'application/vnd.ms-excel';
-const TIPE_BERKAS = /^(image\/(webp|jpeg|png)|application\/pdf|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|application\/vnd\.ms-excel)$/;
+const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', MIME_DOC = 'application/msword';
+const TIPE_BERKAS = /^(image\/(webp|jpeg|png)|application\/pdf|application\/vnd\.openxmlformats-officedocument\.(spreadsheetml\.sheet|wordprocessingml\.document)|application\/vnd\.ms-excel|application\/msword)$/;
 /** Ekstensi berkas dari jenisnya. */
-function extBerkas(tipe) { return { 'application/pdf': '.pdf', 'image/png': '.png', 'image/webp': '.webp', [MIME_XLSX]: '.xlsx', [MIME_XLS]: '.xls' }[tipe] || '.jpg'; } // kelipatan 256 KB (syarat unggah bertahap Drive)
+function extBerkas(tipe) { return { 'application/pdf': '.pdf', 'image/png': '.png', 'image/webp': '.webp', [MIME_XLSX]: '.xlsx', [MIME_XLS]: '.xls', [MIME_DOCX]: '.docx', [MIME_DOC]: '.doc' }[tipe] || '.jpg'; } // kelipatan 256 KB (syarat unggah bertahap Drive)
 
 // ============================================
 // KONFIGURASI — semua ID dibaca dari Script Properties
@@ -192,6 +194,7 @@ function rute() {
     pelatihan_detail: { peran: AI, fn: aksiPelatihanDetail },
     materi_list: { peran: AI, fn: aksiMateriList },
     materi_hapus: { peran: AI, fn: aksiMateriHapus },
+    materi_unggah: { peran: AI, fn: aksiMateriUnggah },
     upload_init: { peran: AI, fn: aksiUploadInit },
     upload_chunk: { peran: AI, fn: aksiUploadChunk },
     soal_list: { peran: AI, fn: aksiSoalList },
@@ -1072,9 +1075,8 @@ function aksiMateriHapus(d, s) {
  * 2) upload_chunk → HP/laptop mengirim potongan ±4 MB berurutan
  * Berkas 50 MB tidak pernah dimuat utuh di memori server.
  */
-function aksiUploadInit(d, s) {
-  const tujuan = d.tujuan || 'materi';
-  if (tujuan !== 'materi') throw new Error('Tujuan unggah tidak dikenal.');
+/** Periksa data materi yang akan diunggah (dipakai unggah sekali-kirim & unggah bertahap). */
+function siapMateri(d, s) {
   const p = cekAkses(s, d.id_pelatihan);
   const ukuran = parseInt(d.ukuran, 10) || 0;
   const nama = String(d.nama || ''), tipeMasuk = String(d.tipe || '');
@@ -1087,11 +1089,45 @@ function aksiUploadInit(d, s) {
   const cakupan = d.cakupan === 'sektor' ? 'sektor' : (d.cakupan === 'umum' ? 'umum' : (p.cakupan === 'sektor' ? 'sektor' : 'umum'));
   const sektor = cakupan === 'sektor' ? (d.sektor || p.sektor) : '';
   if (cakupan === 'sektor' && SEKTOR.indexOf(sektor) < 0) throw new Error('Pilih sektor materi.');
+  return { p: p, mime: mime, ukuran: ukuran, judul: judul, cakupan: cakupan, sektor: sektor, namaFile: p.id_pelatihan + ' - ' + judul + extBerkas(mime) };
+}
+/** Simpan catatan materi setelah file ada di Drive. */
+function catatMateri(x, fileId, s) {
+  return denganKunci(() => {
+    const urut = DB.filter('Materi', y => y.id_pelatihan === x.id_pelatihan).length + 1;
+    const m = {
+      id_materi: genId('MAT'), id_pelatihan: x.id_pelatihan, judul: x.judul, cakupan: x.cakupan,
+      sektor: x.sektor, id_file: fileId, ukuran_file: x.ukuran, urutan: urut, diunggah_oleh: s.n, tgl: now(), tipe_file: x.tipe || 'application/pdf'
+    };
+    DB.insert('Materi', m);
+    cacheDel(['materi_semua']);
+    catatLog(s, 'Mengunggah materi "' + x.judul + '"');
+    return { selesai: true, materi: formatMateri(m), message: 'Materi berhasil diunggah.' };
+  });
+}
+/**
+ * ⚡ Unggah materi kecil (≤ 8 MB) dalam SATU permintaan: langsung dibuat di Drive.
+ * Jauh lebih cepat dari unggah bertahap (tanpa sesi unggah & tanpa permintaan kedua).
+ */
+function aksiMateriUnggah(d, s) {
+  const x = siapMateri(d, s);
+  const bytes = Utilities.base64Decode(d.data || '');
+  if (!bytes.length) throw new Error('File kosong.');
+  if (bytes.length > 8 * MB) throw new Error('File besar harus diunggah bertahap.');
+  const file = folder(CONFIG.FOLDER_MATERI).createFile(Utilities.newBlob(bytes, x.mime, x.namaFile));
+  bagikanPublik(file); // peserta membuka materi lewat tautan; daftar tautan hanya dikirim ke yang berhak
+  return catatMateri({ id_pelatihan: x.p.id_pelatihan, judul: x.judul, cakupan: x.cakupan, sektor: x.sektor, ukuran: bytes.length, tipe: x.mime }, file.getId(), s);
+}
 
+/** Unggah materi besar bertahap (per ±4 MB) lewat sesi unggah Google Drive. */
+function aksiUploadInit(d, s) {
+  const tujuan = d.tujuan || 'materi';
+  if (tujuan !== 'materi') throw new Error('Tujuan unggah tidak dikenal.');
+  const x = siapMateri(d, s), p = x.p, mime = x.mime, ukuran = x.ukuran, judul = x.judul, cakupan = x.cakupan, sektor = x.sektor;
   const res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
     method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': mime, 'X-Upload-Content-Length': String(ukuran) },
-    payload: JSON.stringify({ name: p.id_pelatihan + ' - ' + judul + extBerkas(mime), parents: [CONFIG.FOLDER_MATERI] })
+    payload: JSON.stringify({ name: x.namaFile, parents: [CONFIG.FOLDER_MATERI] })
   });
   if (res.getResponseCode() !== 200) throw new Error('Gagal membuka sesi unggah Drive (' + res.getResponseCode() + ').');
   const h = res.getAllHeaders();
@@ -1125,17 +1161,7 @@ function aksiUploadChunk(d, s) {
   const file = DriveApp.getFileById(fileId);
   bagikanPublik(file); // peserta membuka materi lewat tautan; daftar tautan hanya dikirim ke yang berhak
   cacheDel(['up_' + d.upload_id]);
-  return denganKunci(() => {
-    const urut = DB.filter('Materi', x => x.id_pelatihan === info.id_pelatihan).length + 1;
-    const m = {
-      id_materi: genId('MAT'), id_pelatihan: info.id_pelatihan, judul: info.judul, cakupan: info.cakupan,
-      sektor: info.sektor, id_file: fileId, ukuran_file: info.ukuran, urutan: urut, diunggah_oleh: s.n, tgl: now(), tipe_file: info.tipe || 'application/pdf'
-    };
-    DB.insert('Materi', m);
-    cacheDel(['materi_semua']);
-    catatLog(s, 'Mengunggah materi "' + info.judul + '"');
-    return { selesai: true, materi: formatMateri(m), message: 'Materi berhasil diunggah.' };
-  });
+  return catatMateri(info, fileId, s);
 }
 
 // ---------- BANK SOAL ----------
@@ -1295,7 +1321,7 @@ function aksiTugasNilai(d, s) {
   });
 }
 /**
- * Lampiran tugas dari instruktur/admin (PDF / gambar / Excel, maks 10 MB) → Google Drive folder Tugas/<pelatihan>/Lampiran.
+ * Lampiran tugas dari instruktur/admin (PDF / gambar / Excel / Word, maks 10 MB) → Google Drive folder Tugas/<pelatihan>/Lampiran.
  * d.hapus = true untuk menghapus lampiran.
  */
 function aksiTugasLampiran(d, s) {
@@ -1309,7 +1335,7 @@ function aksiTugasLampiran(d, s) {
     return { message: 'Lampiran tugas dihapus.' };
   }
   const f = d.file || {}, tipe = String(f.tipe || '');
-  if (!TIPE_BERKAS.test(tipe)) throw new Error('Lampiran harus PDF, gambar (WebP/JPG/PNG), atau Excel (.xlsx/.xls).');
+  if (!TIPE_BERKAS.test(tipe)) throw new Error('Lampiran harus PDF, gambar (WebP/JPG/PNG), Excel (.xlsx/.xls), atau Word (.docx/.doc).');
   const bytes = Utilities.base64Decode(f.data || '');
   if (!bytes.length) throw new Error('File lampiran kosong.');
   if (bytes.length > MAX_TUGAS) throw new Error('Ukuran lampiran maksimal 10 MB.');
@@ -2148,7 +2174,7 @@ function aksiPKumpulTugas(d, s) {
   if (lama) throw new Error('Anda sudah mengirim berkas untuk tugas ini. Hapus kiriman lama terlebih dahulu bila ingin mengunggah ulang.');
   const f = d.file || {};
   const tipe = String(f.tipe || '');
-  if (!TIPE_BERKAS.test(tipe)) throw new Error('File harus foto (WebP/JPG/PNG), PDF, atau Excel (.xlsx/.xls).');
+  if (!TIPE_BERKAS.test(tipe)) throw new Error('File harus foto (WebP/JPG/PNG), PDF, Excel (.xlsx/.xls), atau Word (.docx/.doc).');
   const bytes = Utilities.base64Decode(f.data || '');
   if (!bytes.length) throw new Error('File kosong.');
   if (bytes.length > MAX_TUGAS) throw new Error('Ukuran file maksimal 10 MB.');

@@ -10,7 +10,7 @@ const AKTIVITAS = [
   ['absen_2', 'Absensi Hari 2', 'checkSquare', 'Hanya untuk pelatihan 2 hari.'],
   ['pre', 'Pre-test', 'fileQ', 'Dibuka di awal sebelum materi.'],
   ['post', 'Post-test', 'fileQ', 'Dibuka di akhir setelah materi.'],
-  ['tugas', 'Pengumpulan Tugas', 'clipboard', 'Peserta bisa mengunggah foto, PDF, atau Excel.'],
+  ['tugas', 'Pengumpulan Tugas', 'clipboard', 'Peserta bisa mengunggah foto, PDF, Excel, atau Word.'],
   ['evaluasi', 'Evaluasi Pelatihan', 'edit', 'Form kepuasan diisi 1 kali per peserta.']
 ];
 const SYARAT = [['hadir', 'Hadir penuh sesuai jumlah hari'], ['post', 'Sudah mengerjakan post-test'], ['naik', 'Nilai post-test lebih tinggi dari pre-test'], ['tugas', 'Semua tugas terkumpul']];

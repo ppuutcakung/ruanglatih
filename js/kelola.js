@@ -101,6 +101,7 @@ const Kelola = {
   },
 
   modalUnggah(pel, selesai) {
+    API.bangunkan(); // server disiapkan selagi file dipilih
     let files = [];
     const opts = {
       title: 'Unggah Materi (PDF / Excel)', wide: true,
@@ -445,19 +446,20 @@ const Kelola = {
         title: t.id_tugas ? 'Ubah Tugas' : 'Buat Tugas', submit: 'Simpan Tugas',
         fields: [
           { name: 'judul', label: 'Judul tugas', value: t.judul, full: true, placeholder: 'mis. Foto katalog 3 produk unggulan' },
-          { name: 'instruksi', label: 'Instruksi', type: 'textarea', value: t.instruksi, placeholder: 'Jelaskan apa yang harus dikumpulkan peserta (foto / PDF / Excel, maks 10 MB).' },
+          { name: 'instruksi', label: 'Instruksi', type: 'textarea', value: t.instruksi, placeholder: 'Jelaskan apa yang harus dikumpulkan peserta (foto / PDF / Excel / Word, maks 10 MB).' },
           { name: 'batas_waktu', label: 'Batas waktu (opsional)', type: 'datetime-local', value: String(t.batas_waktu || '').slice(0, 16).replace(' ', 'T'), full: true },
           { name: 'lampiran', label: 'Lampiran tugas (opsional)', type: 'html', full: true,
-            html: '<div class="row wrap g8" style="align-items:center"><button type="button" class="btn secondary sm" data-pilihlamp>' + UI.ic('upload', 'sm') + 'Pilih PDF / Gambar / Excel</button>' +
+            html: '<div class="row wrap g8" style="align-items:center"><button type="button" class="btn secondary sm" data-pilihlamp>' + UI.ic('upload', 'sm') + 'Pilih PDF / Gambar / Excel / Word</button>' +
               '<span class="t-sm" data-namalamp></span><button type="button" class="btn ghost sm" data-hapuslamp hidden>' + UI.ic('x', 'sm') + 'Hapus</button></div>',
-            hint: 'Contoh format, panduan, template, atau contoh hasil. PDF, gambar (otomatis diubah ke WebP), atau Excel (.xlsx/.xls) · maks 10 MB · dapat dibuka peserta di Ruang Pelatihan.' }
+            hint: 'Contoh format, panduan, template, atau contoh hasil. PDF, gambar (otomatis diubah ke WebP), Excel (.xlsx/.xls), atau Word (.docx/.doc) · maks 10 MB · dapat dibuka peserta di Ruang Pelatihan.' }
         ],
         onOpen: (m, form) => {
           const nm = $('[data-namalamp]', form), hp = $('[data-hapuslamp]', form);
           const segar = () => { nm.innerHTML = labelLamp(); hp.hidden = !(lamp.file || (t.nama_lampiran && !lamp.hapus)); };
           segar();
           $('[data-pilihlamp]', form).onclick = async () => {
-            const f = (await UI.pilihFile('application/pdf,image/*,' + UI.TERIMA_EXCEL, false))[0];
+            API.bangunkan();
+            const f = (await UI.pilihFile('application/pdf,image/*,' + UI.TERIMA_EXCEL + ',' + UI.TERIMA_WORD, false))[0];
             if (!f) return;
             try { nm.innerHTML = '<span class="spin" style="width:12px;height:12px"></span> Menyiapkan berkas…'; lamp = { file: await UI.siapkanBerkas(f, 10, t => { nm.textContent = t; }) }; segar(); } catch (e) { segar(); UI.gagal(e); }
           };

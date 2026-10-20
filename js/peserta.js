@@ -245,15 +245,16 @@ const Peserta = {
         (x.batas_waktu ? '<div class="t-xs mt8 row g4 ' + (x.lewat ? 'c-bad' : 'c-warn') + '">' + UI.ic('clock', 'sm') + 'Batas: ' + UI.waktu(x.batas_waktu) + '</div>' : '') +
         (k ? '<div class="card well tight mt12"><div class="row"><div class="ic-tile sm">' + UI.ic(UI.ikonBerkas(k.tipe_file, k.nama_file), 'sm') + '</div><div class="grow"><div class="semi t-sm clamp1">' + esc(k.nama_file) + '</div><div class="t-xs muted">Dikirim ' + UI.waktu(k.waktu) + '</div></div>' +
           '<div class="row g4"><button class="btn xs outline" data-aksi="lihat" data-id="' + esc(x.id_tugas) + '">' + UI.ic('eye', 'sm') + 'Lihat</button><button class="btn xs outline" data-aksi="unduhK" data-id="' + esc(x.id_tugas) + '">' + UI.ic('download', 'sm') + 'Unduh</button></div></div>' + (k.catatan ? '<div class="t-sm mt8"><b>Catatan instruktur:</b> ' + esc(k.catatan) + '</div>' : '') + '</div>' : '') +
-        (boleh && !k ? '<button class="btn primary block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + 'Unggah Tugas</button><div class="hint center mt8">Foto (kamera / galeri), PDF, atau Excel · maksimal 10 MB</div>' : '') +
+        (boleh && !k ? '<button class="btn primary block mt12" data-aksi="kumpul" data-id="' + esc(x.id_tugas) + '">' + UI.ic('upload', 'sm') + 'Unggah Tugas</button><div class="hint center mt8">Foto (kamera / galeri), PDF, Excel, atau Word · maksimal 10 MB</div>' : '') +
         (boleh && k ? '<button class="btn danger block mt12" data-aksi="hapusK" data-id="' + esc(x.id_tugas) + '">' + UI.ic('trash', 'sm') + 'Hapus Kiriman</button><div class="hint center mt8">Salah berkas? Hapus kiriman ini, lalu unggah ulang berkas yang benar.</div>' : '') +
         (k && !k.dinilai && !boleh ? '<div class="hint center mt8">Kiriman tidak bisa diubah lagi (' + (x.lewat ? 'batas waktu sudah lewat' : 'pengumpulan sudah ditutup') + ').</div>' : '') + '</div>';
     }).join('');
   },
 
   async kumpulTugas(t, sesudah) {
-    // Foto (kamera/galeri, termasuk format WebP/HEIC bila bisa dibuka), PDF, atau Excel
-    const f = (await UI.pilihFile('image/*,application/pdf,' + UI.TERIMA_EXCEL, false))[0];
+    // Foto (kamera/galeri, termasuk format WebP/HEIC bila bisa dibuka), PDF, Excel, atau Word
+    API.bangunkan(); // server disiapkan selagi berkas dipilih
+    const f = (await UI.pilihFile('image/*,application/pdf,' + UI.TERIMA_EXCEL + ',' + UI.TERIMA_WORD, false))[0];
     if (!f) return;
     let file;
     if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) UI.toast('Memperkecil PDF… mohon tunggu sebentar.', 'info');

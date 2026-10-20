@@ -25,6 +25,7 @@ const IKON = {
   clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>',
   sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+  doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m8 12 1.5 6L12 14l2.5 4L16 12"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
   fileQ: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2.2-2.4 3.2M12 17h.01"/>',
   star: '<path d="m12 3 2.9 5.9 6.1.9-4.5 4.3 1.1 6.1L12 17.3l-5.6 2.9 1.1-6.1L3 9.8l6.1-.9z"/>',
@@ -338,8 +339,13 @@ const UI = {
   apaExcel(f) { return /\.xlsx?$/i.test((f && (f.name || f.nama)) || '') || /spreadsheetml|ms-excel/i.test((f && (f.type || f.tipe)) || ''); },
   /** Jenis berkas Excel dipastikan benar (HP Android sering mengirim jenis kosong). */
   keExcel(f) { const t = /\.xls$/i.test(f.name) ? UI.EXCEL.xls : UI.EXCEL.xlsx; return f.type === t ? f : new File([f], f.name, { type: t }); },
-  /** Ikon sesuai jenis berkas: Excel → sheet, PDF → file, selain itu gambar. */
-  ikonBerkas(tipe, nama) { const x = String(tipe || '') + ' ' + String(nama || ''); return /sheet|excel|\.xlsx?\b/i.test(x) ? 'sheet' : /pdf/i.test(x) ? 'file' : 'image'; },
+  // ---------- Word (.docx / .doc) ----------
+  WORD: { docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword' },
+  TERIMA_WORD: '.docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword',
+  apaWord(f) { return /\.docx?$/i.test((f && (f.name || f.nama)) || '') || /wordprocessingml|msword/i.test((f && (f.type || f.tipe)) || ''); },
+  keWord(f) { const t = /\.doc$/i.test(f.name) ? UI.WORD.doc : UI.WORD.docx; return f.type === t ? f : new File([f], f.name, { type: t }); },
+  /** Ikon sesuai jenis berkas: Excel → sheet, Word → doc, PDF → file, selain itu gambar. */
+  ikonBerkas(tipe, nama) { const x = String(tipe || '') + ' ' + String(nama || ''); return /sheet|excel|\.xlsx?\b/i.test(x) ? 'sheet' : /wordprocessing|msword|\.docx?\b/i.test(x) ? 'doc' : /pdf/i.test(x) ? 'file' : 'image'; },
 
   async siapkanBerkas(file, maksMB, progres) {
     maksMB = maksMB || 10;
@@ -347,8 +353,12 @@ const UI = {
       if (file.size > maksMB * 1048576) throw new Error('Ukuran file Excel maksimal ' + maksMB + ' MB.');
       return UI.keExcel(file);
     }
+    if (UI.apaWord(file)) { // Word dikirim apa adanya (tidak diubah)
+      if (file.size > maksMB * 1048576) throw new Error('Ukuran file Word maksimal ' + maksMB + ' MB.');
+      return UI.keWord(file);
+    }
     const pdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
-    if (!pdf && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) throw new Error('Berkas harus berupa foto, PDF, atau Excel (.xlsx/.xls).');
+    if (!pdf && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name)) throw new Error('Berkas harus berupa foto, PDF, Excel (.xlsx/.xls), atau Word (.docx/.doc).');
     let hasil = file;
     if (pdf) {
       if (file.size > maksMB * 4 * 1048576) throw new Error('PDF terlalu besar (maks ' + maksMB + ' MB setelah diperkecil).');
@@ -361,6 +371,59 @@ const UI = {
     } else hasil = await UI.keWebp(file);
     if (hasil.size > maksMB * 1048576) throw new Error('Ukuran berkas maksimal ' + maksMB + ' MB' + (pdf ? ' (sudah diperkecil, masih ' + UI.ukuran(hasil.size) + '). Pecah PDF menjadi beberapa bagian.' : '.'));
     return hasil;
+  },
+  /** Ambil satu berkas dari dalam ZIP (docx = ZIP) memakai pembuka bawaan browser — tanpa pustaka luar. */
+  async isiZip(buf, cari) {
+    const u = new Uint8Array(buf), v = new DataView(buf);
+    let e = -1;
+    for (let i = u.length - 22; i >= Math.max(0, u.length - 66000); i--) if (v.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('bukan zip');
+    let p = v.getUint32(e + 16, true);
+    const n = v.getUint16(e + 10, true);
+    for (let k = 0; k < n; k++) {
+      if (v.getUint32(p, true) !== 0x02014b50) break;
+      const metode = v.getUint16(p + 10, true), uk = v.getUint32(p + 20, true), ln = v.getUint16(p + 28, true), le = v.getUint16(p + 30, true), lc = v.getUint16(p + 32, true), lok = v.getUint32(p + 42, true);
+      const nama = new TextDecoder().decode(u.subarray(p + 46, p + 46 + ln));
+      if (nama === cari) {
+        const mulai = lok + 30 + v.getUint16(lok + 26, true) + v.getUint16(lok + 28, true), data = u.subarray(mulai, mulai + uk);
+        if (metode === 0) return new TextDecoder().decode(data);
+        const s = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        return await new Response(s).text();
+      }
+      p += 46 + ln + le + lc;
+    }
+    throw new Error('tidak ditemukan');
+  },
+  /** Tampilkan isi dokumen Word (.docx): paragraf, judul, tebal/miring, daftar & tabel. */
+  async pratinjauWord(blob, host, nama) {
+    UI.loading(host, 4);
+    const cadangan = () => { host.innerHTML = '<div class="empty"><div class="ic-tile">' + UI.ic('doc', 'lg') + '</div><div class="semi">' + esc(nama || 'Dokumen Word') + '</div><div class="t-sm">' + UI.ukuran(blob.size) + ' · pratinjau tidak tersedia' + (/\.doc$/i.test(nama || '') ? ' untuk format .doc lama' : '') + ', silakan unduh untuk membuka di Word.</div></div>'; };
+    try {
+      if (/\.doc$/i.test(nama || '') || typeof DecompressionStream === 'undefined') return cadangan();
+      const xml = new DOMParser().parseFromString(await UI.isiZip(await blob.arrayBuffer(), 'word/document.xml'), 'application/xml');
+      const anak = (el, n) => Array.from(el.children).filter(c => c.localName === n);
+      const nyala = el => el && !/^(0|false|none)$/i.test(el.getAttribute('w:val') || '');
+      const teks = el => Array.from(el.getElementsByTagName('*')).filter(x => x.localName === 'r').map(r => {
+        const pr = anak(r, 'rPr')[0], b = pr && nyala(anak(pr, 'b')[0]), i = pr && nyala(anak(pr, 'i')[0]), uu = pr && nyala(anak(pr, 'u')[0]);
+        let s = Array.from(r.children).map(c => c.localName === 't' ? esc(c.textContent) : c.localName === 'tab' ? '&emsp;' : (c.localName === 'br' || c.localName === 'cr') ? '<br>' : '').join('');
+        if (!s) return '';
+        if (b) s = '<b>' + s + '</b>'; if (i) s = '<i>' + s + '</i>'; if (uu) s = '<u>' + s + '</u>';
+        return s;
+      }).join('');
+      const para = p => {
+        const pr = anak(p, 'pPr')[0], gaya = pr && anak(pr, 'pStyle')[0] ? anak(pr, 'pStyle')[0].getAttribute('w:val') || '' : '';
+        const daftar = (pr && anak(pr, 'numPr').length) || /list|daftar|bullet/i.test(gaya), isi = teks(p);
+        const tengah = pr && anak(pr, 'jc')[0] && /center/.test(anak(pr, 'jc')[0].getAttribute('w:val') || '');
+        if (/^(heading|judul|title)/i.test(gaya)) return '<div class="h-sm" style="margin:14px 0 6px' + (tengah ? ';text-align:center' : '') + '">' + (isi || '&nbsp;') + '</div>';
+        return '<p style="margin:0 0 8px;line-height:1.6' + (daftar ? ';padding-left:18px;text-indent:-12px' : '') + (tengah ? ';text-align:center' : '') + '">' + (daftar ? '• ' : '') + (isi || '&nbsp;') + '</p>';
+      };
+      const tabel = t => '<div style="overflow:auto;margin:8px 0 14px"><table class="tbl" style="border:1px solid var(--blush-2)"><tbody>' + anak(t, 'tr').map(tr => '<tr>' + anak(tr, 'tc').map(tc => '<td style="border:1px solid var(--blush-2);vertical-align:top">' + anak(tc, 'p').map(para).join('') + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+      const body = Array.from(xml.getElementsByTagName('*')).find(x => x.localName === 'body');
+      if (!body) return cadangan();
+      const html = Array.from(body.children).map(c => c.localName === 'p' ? para(c) : c.localName === 'tbl' ? tabel(c) : '').join('');
+      host.innerHTML = '<div style="max-height:62vh;overflow:auto;padding:20px 24px;background:#fff;border:1px solid var(--blush-2);border-radius:12px;font-size:14px">' + (html.replace(/<p[^>]*>&nbsp;<\/p>/g, '').trim() ? html : UI.kosong('Dokumen ini kosong.', 'doc')) + '</div>' +
+        '<div class="t-xs muted mt8">Pratinjau sederhana (teks, tabel, tebal/miring). Gambar & tata letak lengkap: unduh dan buka di Word.</div>';
+    } catch (e) { cadangan(); }
   },
   /** Tampilkan isi Excel sebagai tabel (per sheet, maks 300 baris × 40 kolom). */
   async pratinjauExcel(blob, host, nama) {
@@ -414,6 +477,15 @@ const UI = {
         onClose: () => setTimeout(() => URL.revokeObjectURL(url), 30000)
       });
       UI.pratinjauExcel(blob, $('[data-xl]', m.el), o.nama);
+      return;
+    }
+    if (UI.apaWord(o)) { // Word: pratinjau isi dokumen langsung di aplikasi (.docx)
+      const m = UI.modal({
+        title: judul || o.nama, wide: true, body: '<div data-doc></div>',
+        foot: '<a class="btn primary" href="' + url + '" download="' + esc(o.nama) + '">' + UI.ic('download', 'sm') + 'Unduh Word</a>',
+        onClose: () => setTimeout(() => URL.revokeObjectURL(url), 30000)
+      });
+      UI.pratinjauWord(blob, $('[data-doc]', m.el), o.nama);
       return;
     }
     const gambar = /^image\//.test(o.tipe);

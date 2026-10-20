@@ -29,7 +29,7 @@ const BACA = {
   p_riwayat: '*'
 };
 const TULIS = {
-  materi_hapus: 'materi', upload_chunk: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_lampiran: 'tugas', p_hapus_tugas: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
+  materi_hapus: 'materi', upload_chunk: 'materi', materi_unggah: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_lampiran: 'tugas', p_hapus_tugas: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
   umkm_simpan: 'umkm', umkm_reset_pin: 'umkm', umkm_status: 'umkm', umkm_import: 'umkm', instruktur_simpan: 'ins',
   pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
@@ -38,7 +38,7 @@ const TULIS = {
 };
 
 // Aksi yang memang bisa lama di server (PDF, unggah, sertifikat) → batas waktu lebih longgar
-const LAMA = { laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1, tugas_lampiran: 1, tugas_lampiran_lihat: 1, p_hapus_tugas: 1 };
+const LAMA = { materi_unggah: 1, laporan_export: 1, absensi_export: 1, upload_chunk: 1, upload_init: 1, pelatihan_flyer: 1, p_kumpul_tugas: 1, umkm_import: 1, multi: 1, p_unduh_sertifikat: 1, tugas_file: 1, tugas_lampiran: 1, tugas_lampiran_lihat: 1, p_hapus_tugas: 1 };
 
 /** Penyimpanan cache: memori (instan) + localStorage (bertahan saat aplikasi dibuka ulang). */
 const Simpan = {
@@ -268,15 +268,30 @@ const API = {
   /** Setelah menyimpan: panaskan ulang secukupnya, ditunda 4 detik agar tidak berebut dengan penyimpanan berikutnya. */
   panaskanNanti() { clearTimeout(this._tp); this._tp = setTimeout(() => this.panaskan(true), 4000); },
 
-  /** Unggah PDF besar (maks 50 MB) bertahap per potongan ±4 MB, lengkap dengan persentase. */
+  /** "Bangunkan" server GAS di latar (mis. saat jendela unggah dibuka) → unggah berikutnya tidak menunggu server bangun. */
+  bangunkan() {
+    if (Date.now() - (this._bangun || 0) < 120000 || !GAS_URL || GAS_URL.indexOf('TEMPEL_') >= 0) return;
+    this._bangun = Date.now();
+    fetch(GAS_URL, { method: 'GET', redirect: 'follow' }).catch(() => { });
+  },
+  /** Unggah materi: kecil = sekali kirim, besar (maks 50 MB) = bertahap per potongan ±4 MB, lengkap dengan persentase. */
   async unggahBesar(file, meta, onProgress) {
+    // ⚡ File ≤ 6 MB: SATU permintaan (langsung tersimpan di Drive) — jauh lebih cepat dari unggah bertahap
+    if (file.size <= 6 * 1048576) {
+      onProgress && onProgress(15);
+      const data = await UI.blobKeBase64(file);
+      onProgress && onProgress(40);
+      let p = 40; const t = setInterval(() => { p = Math.min(95, p + 5); onProgress && onProgress(p); }, 400);
+      try { return await this.call('materi_unggah', Object.assign({ nama: file.name, tipe: file.type || 'application/pdf', ukuran: file.size, data: data }, meta), { retry: 3 }); }
+      finally { clearInterval(t); onProgress && onProgress(100); }
+    }
     const init = await this.call('upload_init', Object.assign({ tujuan: 'materi', nama: file.name, tipe: file.type || 'application/pdf', ukuran: file.size }, meta));
     const chunk = init.chunk;
     let offset = 0, hasil = null;
     while (offset < file.size) {
       const potong = file.slice(offset, Math.min(offset + chunk, file.size));
       const data = await UI.blobKeBase64(potong);
-      const r = await this.call('upload_chunk', { upload_id: init.upload_id, offset, data }, { retry: 5 });
+      const r = await this.call('upload_chunk', { upload_id: init.upload_id, offset, data, id_pelatihan: meta.id_pelatihan }, { retry: 5 });
       if (r.selesai) { hasil = r; offset = file.size; }
       else offset = r.diterima || (offset + potong.size);
       onProgress && onProgress(Math.min(99, Math.round(offset / file.size * 100)));
