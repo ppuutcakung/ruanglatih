@@ -203,6 +203,32 @@ var FBC = {
     return null;
   },
 
+  /**
+   * Kartu scan absensi QR langsung dari Firestore (publik, tanpa login) — tampil ±0,5 detik.
+   * Hasil pertama dikembalikan (null bila kartu belum ada → aplikasi memakai server); perubahan
+   * berikutnya (mis. admin membuka absensi) dikirim ke onUbah secara realtime.
+   */
+  async kartuQR(id, kode, onUbah, simpanHenti) {
+    if (!this.aktif() || !API.modeFB() || !kode) return null;
+    try { await this.muat(); } catch (e) { return null; }
+    const bentuk = x => {
+      const hi = this.waktu().slice(0, 10), akt = x.aktivitas || {};
+      return { id_pelatihan: x.id_pelatihan, judul: x.judul, tema: x.tema, instruktur: x.instruktur, jam: x.jam, format: x.format, lokasi: x.lokasi,
+        jumlah_hari: x.jumlah_hari, status: x.status,
+        hari: (x.tanggal_hari || []).map((t, i) => ({ hari_ke: i + 1, tanggal: t, hari_ini: t === hi, buka: !!akt['absen_' + (i + 1)] || t === hi })) };
+    };
+    return new Promise(res => {
+      let awal = true, off = () => { };
+      const t = setTimeout(() => { if (awal) { awal = false; res(null); } }, 6000);
+      off = this.db.doc('qr/' + kode).onSnapshot(snap => {
+        const x = snap.exists ? snap.data() : null, ok = !!(x && x.id_pelatihan === id);
+        if (awal) { awal = false; clearTimeout(t); res(ok ? bentuk(x) : null); if (!ok) off(); return; }
+        if (ok && onUbah) onUbah(bentuk(x));
+      }, () => { if (awal) { awal = false; clearTimeout(t); res(null); } });
+      if (simpanHenti) simpanHenti(() => off());
+    });
+  },
+
   /** Identitas aplikasi (nama, logo, warna) langsung dari Firestore — tanpa GAS. */
   async brand() {
     await this.muat();

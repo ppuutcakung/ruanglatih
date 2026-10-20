@@ -2747,6 +2747,13 @@ var CERMIN = {
   // FIRESTORE → TABEL
   // S.kol(nama) mengembalikan array dokumen { _id, ...isi }
   // ===========================================================
+  /** Isi kartu QR absensi publik: hanya info tampilan + status absen (tanpa data peserta). */
+  docQR(p) {
+    const a = p.aktivitas || {};
+    return { id_pelatihan: p.id_pelatihan, judul: p.judul || '', tema: p.tema || '', instruktur: p.nama_instruktur || '', jam: p.jam || '', format: p.format || '',
+      lokasi: p.lokasi_atau_link || '', jumlah_hari: p.jumlah_hari || 1, status: p.status || '', tanggal_hari: p.tanggal_hari || [p.tanggal_mulai],
+      aktivitas: { absen_1: !!a.absen_1, absen_2: !!a.absen_2 } };
+  },
   keBaris(t, S) {
     const B = o => CERMIN.baris(t, o), s = CERMIN.s;
     switch (t) {
@@ -2851,6 +2858,8 @@ var CERMIN = {
         id_template_sertifikat: r.id_template_sertifikat, tgl_dibuat: r.tgl_dibuat, link_dokumentasi: r.link_dokumentasi || ''
       };
     };
+    // Kartu QR absensi publik (dibaca halaman scan tanpa login) — hanya ada bila QR pelatihan sudah dibuat
+    const qrKode = idPel => { try { const d = (S.kol('pelatihan_rahasia') || []).find(x => x._id === idPel); return d && d.qr_kode ? d.qr_kode : ''; } catch (e) { return ''; } };
     const regPel = idPel => S.kol('pendaftaran').filter(x => x.id_pelatihan === idPel);
     const regUmkm = idU => S.kol('pendaftaran').filter(x => x.id_umkm === idU);
     const idTugasPel = idTugas => { const t = (saatIni('Tugas') || []).find(x => x.id_tugas === idTugas); return t ? t.id_pelatihan : ''; };
@@ -2899,8 +2908,11 @@ var CERMIN = {
           else set('admin', r.username, { username: r.username, nama: r.nama, password_hash: r.password_hash });
           break;
         case 'Pelatihan': {
-          if (op.jenis === 'remove') { hapus('pelatihan', r.id_pelatihan); hapus('pelatihan_rahasia', r.id_pelatihan); hapus('kunci_soal', r.id_pelatihan); break; }
-          set('pelatihan', r.id_pelatihan, docPelatihan(r));
+          if (op.jenis === 'remove') { const kq = qrKode(r.id_pelatihan); if (kq) hapus('qr', kq); hapus('pelatihan', r.id_pelatihan); hapus('pelatihan_rahasia', r.id_pelatihan); hapus('kunci_soal', r.id_pelatihan); break; }
+          const dp = docPelatihan(r);
+          set('pelatihan', r.id_pelatihan, dp);
+          const kq = qrKode(r.id_pelatihan);
+          if (kq) set('qr', kq, CERMIN.docQR(dp)); // kartu scan absensi ikut terbarui (judul, jadwal, absen dibuka/ditutup)
           if (op.jenis === 'update' && (kunci.indexOf('id_instruktur') >= 0 || kunci.indexOf('tanggal_mulai') >= 0))
             regPel(r.id_pelatihan).forEach(x => ubah('pendaftaran', x._id, [[['id_instruktur'], r.id_instruktur], [['tahun'], String(r.tanggal_mulai).slice(0, 4)]]));
           break;

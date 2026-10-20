@@ -789,12 +789,21 @@ const Admin = {
           try { await UI.sibuk(b, async () => { detAbs.qr_kode = (await API.call('qr_kode', { id_pelatihan: idPel })).qr_kode; }); } catch (e) { return UI.gagal(e); }
         }
         this.modalQR(detAbs.pelatihan, detAbs.qr_kode);
+        this.siapkanKartuQR(idPel, detAbs.qr_kode);
       },
       xlsx: b => this.eksporAbsensi(b, detAbs, 'xlsx'),
       pdf: b => this.eksporAbsensi(b, detAbs, 'pdf'),
       togel: b => this.aksiTogel(b, v => { const t = b.parentNode.querySelector('.t-sm.semi'); if (t) t.textContent = v ? 'Dibuka' : 'Ditutup'; })
     });
     try { await Kelola.pemilih($('[data-picker]', el), {}, id => { idPel = id; muat(); }); } catch (e) { UI.galat(isi, e, () => this.absensi(el)); }
+  },
+
+  /** Kartu scan QR publik (Firebase) → halaman scan peserta tampil instan. Ditulis dari perangkat admin; cadangan lewat server. */
+  siapkanKartuQR(idPel, kode) {
+    if (!kode || !API.modeFB() || !window.FSD || !window.MESIN || !FBC.db) return;
+    const p = FSD.data.pelatihan && FSD.data.pelatihan.get(idPel);
+    const tulis = p ? FBC.db.doc('qr/' + kode).set(MESIN.CERMIN.docQR(p)) : Promise.reject(new Error('data pelatihan belum dimuat'));
+    tulis.catch(() => API._kirim('qr_kode', { id_pelatihan: idPel }, { retry: 2 }).catch(() => { }));
   },
 
   /** QR absensi per pelatihan: tampil di layar/proyektor, unduh PNG, salin tautan. */

@@ -286,52 +286,70 @@ var App = {
     app.innerHTML = this.kerangkaAuth('Absensi Pelatihan', APP_CONFIG.tagline || 'Pusat Pendampingan UMKM Cakung', '<div data-qr></div>');
     const box = $('[data-qr]', app);
     UI.loading(box, 2);
-    let d;
-    try { d = await API.call('qr_info', { id_pelatihan: id, kode: kode }, { retry: 5 }); }
-    catch (e) {
+    API.bangunkan(); // server disiapkan selagi peserta mengisi nama → "Kirim Absensi" lebih cepat
+    const salah = e => {
       box.innerHTML = '<div class="empty"><div class="ic-tile" style="background:var(--bad-bg);color:var(--bad)">' + UI.ic('alert', 'lg') + '</div><div class="semi">QR tidak dapat dipakai</div><div class="t-sm">' + esc(e.message) + '</div></div>' +
         '<a class="btn outline block mt12" href="#/">Buka ' + esc(APP_CONFIG.nama) + '</a>';
-      return;
-    }
-    const bisa = d.hari.filter(h => h.buka);
-    let hari = (d.hari.find(h => h.hari_ini && h.buka) || bisa[0] || {}).hari_ke || 0;
-    const nmU = localStorage.getItem('rl_qr_umkm') || localStorage.getItem('rl_umkm') || '';
-    const nmP = localStorage.getItem('rl_qr_peserta') || '';
-    box.innerHTML = '<div class="center" style="margin-bottom:16px"><div class="chip solid sm" style="margin-bottom:8px">' + UI.ic('checkSquare', 'sm') + 'Scan Absensi</div>' +
-      '<div class="h-md">' + esc(d.judul) + '</div><div class="col g4 t-sm muted mt8" style="align-items:center"><span class="row g4">' + UI.ic('clock', 'sm') + esc(d.jam || '-') + '</span>' +
-      '<span class="row g4">' + UI.ic(d.format === 'online' ? 'link' : 'pin', 'sm') + '<span class="clamp1">' + esc(d.format === 'online' ? 'Online' : d.lokasi) + '</span></span><span class="row g4">' + UI.ic('user', 'sm') + esc(d.instruktur) + '</span></div></div>' +
-      (bisa.length ? '<form class="col g20" data-form novalidate>' +
-        '<div class="field"><span class="lbl">Pilih hari sesi</span><div class="seg" data-hari>' + d.hari.map(h => '<button type="button" data-v="' + h.hari_ke + '" class="' + (h.hari_ke === hari ? 'on' : '') + '"' + (h.buka ? '' : ' disabled style="opacity:.45"') + '>Hari ' + h.hari_ke + '<br><small style="font-weight:500">' + esc(UI.tglPendek(h.tanggal)) + (h.buka ? '' : ' · belum dibuka') + '</small></button>').join('') + '</div></div>' +
-        '<div class="field"><label for="q_umkm">Nama UMKM / Usaha</label><div class="input-ic">' + UI.ic('store') + '<input class="input" id="q_umkm" autocomplete="organization" autocapitalize="words" spellcheck="false" placeholder="mis. Dapur Berkah Bu Ani" value="' + esc(nmU) + '"></div></div>' +
-        '<div class="field"><label for="q_peserta">Nama Peserta</label><div class="input-ic">' + UI.ic('user') + '<input class="input" id="q_peserta" autocomplete="name" autocapitalize="words" placeholder="Nama Anda yang didaftarkan" value="' + esc(nmP) + '"></div></div>' +
-        '<div class="err" hidden data-err></div><button class="btn primary block" type="submit" data-kirim style="height:52px">' + UI.ic('hand') + 'Kirim Absensi</button></form>'
-        : '<div class="card well center t-sm">' + UI.ic('lock', 'sm') + ' Absensi untuk pelatihan ini belum dibuka. Silakan hubungi panitia.</div>');
-    const seg = $('[data-hari]', box);
-    if (seg) seg.style.cssText += ';height:auto';
-    $$('[data-hari] button', box).forEach(b => { b.style.height = 'auto'; b.style.padding = '8px 6px'; b.style.lineHeight = '1.3'; });
-    if (seg) seg.onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; hari = +b.dataset.v; $$('button', seg).forEach(x => x.classList.toggle('on', x === b)); };
-    const f = $('[data-form]', box);
-    if (!f) return;
-    f.onsubmit = async e => {
-      e.preventDefault();
-      const err = $('[data-err]', f), btn = $('[data-kirim]', f);
-      const nu = $('#q_umkm').value.trim().replace(/\s+/g, ' '), np = $('#q_peserta').value.trim().replace(/\s+/g, ' ');
-      err.hidden = true;
-      const salah = !hari ? 'Pilih hari sesi.' : !nu ? 'Isi nama UMKM / usaha.' : !np ? 'Isi nama peserta.' : '';
-      if (salah) { err.textContent = salah; err.hidden = false; return; }
-      try {
-        let r;
-        await UI.sibuk(btn, async ubah => {
-          r = await API.call('qr_absen', { id_pelatihan: id, kode: kode, hari_ke: hari, nama_umkm: nu, nama_peserta: np }, { retry: 8, onRetry: n => ubah('Antrean ramai, mencoba lagi (' + n + ')…') });
-        }, 'Mengirim…');
-        localStorage.setItem('rl_qr_umkm', nu); localStorage.setItem('rl_qr_peserta', np);
-        box.innerHTML = '<div class="center col g8" style="padding:8px 0"><div class="ic-tile" style="width:72px;height:72px;border-radius:50%;background:var(--ok-bg);color:var(--ok);margin:0 auto">' + UI.ic('checkCircle', 'lg') + '</div>' +
-          '<div class="h-md mt8">' + (r.sudah ? 'Sudah Tercatat Hadir' : 'Absensi Berhasil!') + '</div><div class="t-sm muted">' + esc(r.judul) + '</div>' +
-          '<div class="card well tight mt12" style="text-align:left"><dl class="kv"><dt>Hari</dt><dd>Hari ' + r.hari_ke + ' · ' + esc(UI.tglHari(r.tanggal)) + '</dd><dt>UMKM</dt><dd>' + esc(r.nama_umkm) + '</dd><dt>Peserta</dt><dd>' + esc(r.nama_peserta) + '</dd><dt>Jam</dt><dd>' + esc(UI.jam(r.waktu)) + ' WIB</dd></dl></div>' +
-          '<div class="t-sm muted mt8">' + (r.sudah ? 'Absensi Anda sudah tercatat sebelumnya.' : 'Terima kasih, selamat mengikuti pelatihan. Anda tidak perlu absen lagi di aplikasi.') + '</div>' +
-          '<a class="btn primary block mt12" href="#/">' + UI.ic('home', 'sm') + 'Buka Aplikasi ' + esc(APP_CONFIG.nama) + '</a></div>';
-      } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     };
+    let isiU = null, isiP = null, kirim = false, selesai = false, henti = null, terakhir = '';
+    // ⚡ Kartu dibaca langsung dari Firebase (±0,5 dtk) & realtime: absen dibuka admin → kartu terbuka sendiri
+    const tampil = d => {
+      const sid = JSON.stringify(d);
+      if (!box.isConnected) { if (henti) henti(); return; }
+      if (sid === terakhir || selesai) return;
+      terakhir = sid;
+      const u0 = $('#q_umkm', box), p0 = $('#q_peserta', box);
+      if (u0) isiU = u0.value; if (p0) isiP = p0.value;
+      const bisa = d.hari.filter(h => h.buka);
+      let hari = (d.hari.find(h => h.hari_ini && h.buka) || bisa[0] || {}).hari_ke || 0;
+      const nmU = isiU !== null ? isiU : (localStorage.getItem('rl_qr_umkm') || localStorage.getItem('rl_umkm') || '');
+      const nmP = isiP !== null ? isiP : (localStorage.getItem('rl_qr_peserta') || '');
+      box.innerHTML = '<div class="center" style="margin-bottom:16px"><div class="chip solid sm" style="margin-bottom:8px">' + UI.ic('checkSquare', 'sm') + 'Scan Absensi</div>' +
+        '<div class="h-md">' + esc(d.judul) + '</div><div class="col g4 t-sm muted mt8" style="align-items:center"><span class="row g4">' + UI.ic('clock', 'sm') + esc(d.jam || '-') + '</span>' +
+        '<span class="row g4">' + UI.ic(d.format === 'online' ? 'link' : 'pin', 'sm') + '<span class="clamp1">' + esc(d.format === 'online' ? 'Online' : d.lokasi) + '</span></span><span class="row g4">' + UI.ic('user', 'sm') + esc(d.instruktur) + '</span></div></div>' +
+        (bisa.length ? '<form class="col g20" data-form novalidate>' +
+          '<div class="field"><span class="lbl">Pilih hari sesi</span><div class="seg" data-hari>' + d.hari.map(h => '<button type="button" data-v="' + h.hari_ke + '" class="' + (h.hari_ke === hari ? 'on' : '') + '"' + (h.buka ? '' : ' disabled style="opacity:.45"') + '>Hari ' + h.hari_ke + '<br><small style="font-weight:500">' + esc(UI.tglPendek(h.tanggal)) + (h.buka ? '' : ' · belum dibuka') + '</small></button>').join('') + '</div></div>' +
+          '<div class="field"><label for="q_umkm">Nama UMKM / Usaha</label><div class="input-ic">' + UI.ic('store') + '<input class="input" id="q_umkm" autocomplete="organization" autocapitalize="words" spellcheck="false" placeholder="mis. Dapur Berkah Bu Ani" value="' + esc(nmU) + '"></div></div>' +
+          '<div class="field"><label for="q_peserta">Nama Peserta</label><div class="input-ic">' + UI.ic('user') + '<input class="input" id="q_peserta" autocomplete="name" autocapitalize="words" placeholder="Nama Anda yang didaftarkan" value="' + esc(nmP) + '"></div></div>' +
+          '<div class="err" hidden data-err></div><button class="btn primary block" type="submit" data-kirim style="height:52px">' + UI.ic('hand') + 'Kirim Absensi</button></form>'
+          : '<div class="card well center t-sm">' + UI.ic('lock', 'sm') + ' Absensi untuk pelatihan ini belum dibuka. Silakan hubungi panitia.</div>');
+      const seg = $('[data-hari]', box);
+      if (seg) seg.style.cssText += ';height:auto';
+      $$('[data-hari] button', box).forEach(b => { b.style.height = 'auto'; b.style.padding = '8px 6px'; b.style.lineHeight = '1.3'; });
+      if (seg) seg.onclick = e => { const b = e.target.closest('button'); if (!b || b.disabled) return; hari = +b.dataset.v; $$('button', seg).forEach(x => x.classList.toggle('on', x === b)); };
+      const f = $('[data-form]', box);
+      if (!f) return;
+      f.onsubmit = async e => {
+        e.preventDefault();
+        const err = $('[data-err]', f), btn = $('[data-kirim]', f);
+        const nu = $('#q_umkm').value.trim().replace(/\s+/g, ' '), np = $('#q_peserta').value.trim().replace(/\s+/g, ' ');
+        err.hidden = true;
+        const salah = !hari ? 'Pilih hari sesi.' : !nu ? 'Isi nama UMKM / usaha.' : !np ? 'Isi nama peserta.' : '';
+        if (salah) { err.textContent = salah; err.hidden = false; return; }
+        try {
+          let r;
+          kirim = true;
+          await UI.sibuk(btn, async ubah => {
+            r = await API.call('qr_absen', { id_pelatihan: id, kode: kode, hari_ke: hari, nama_umkm: nu, nama_peserta: np }, { retry: 8, onRetry: n => ubah('Antrean ramai, mencoba lagi (' + n + ')…') });
+          }, 'Mengirim…');
+          selesai = true; if (henti) henti();
+          localStorage.setItem('rl_qr_umkm', nu); localStorage.setItem('rl_qr_peserta', np);
+          box.innerHTML = '<div class="center col g8" style="padding:8px 0"><div class="ic-tile" style="width:72px;height:72px;border-radius:50%;background:var(--ok-bg);color:var(--ok);margin:0 auto">' + UI.ic('checkCircle', 'lg') + '</div>' +
+            '<div class="h-md mt8">' + (r.sudah ? 'Sudah Tercatat Hadir' : 'Absensi Berhasil!') + '</div><div class="t-sm muted">' + esc(r.judul) + '</div>' +
+            '<div class="card well tight mt12" style="text-align:left"><dl class="kv"><dt>Hari</dt><dd>Hari ' + r.hari_ke + ' · ' + esc(UI.tglHari(r.tanggal)) + '</dd><dt>UMKM</dt><dd>' + esc(r.nama_umkm) + '</dd><dt>Peserta</dt><dd>' + esc(r.nama_peserta) + '</dd><dt>Jam</dt><dd>' + esc(UI.jam(r.waktu)) + ' WIB</dd></dl></div>' +
+            '<div class="t-sm muted mt8">' + (r.sudah ? 'Absensi Anda sudah tercatat sebelumnya.' : 'Terima kasih, selamat mengikuti pelatihan. Anda tidak perlu absen lagi di aplikasi.') + '</div>' +
+            '<a class="btn primary block mt12" href="#/">' + UI.ic('home', 'sm') + 'Buka Aplikasi ' + esc(APP_CONFIG.nama) + '</a></div>';
+        } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+        finally { kirim = false; }
+      };
+    };
+    let d = null;
+    try { d = await FBC.kartuQR(id, kode, x => { if (!kirim) tampil(x); }, h => { henti = h; }); } catch (e) { d = null; }
+    if (!d) { // cadangan: QR lama yang kartunya belum ada di Firebase → lewat server
+      try { d = await API.call('qr_info', { id_pelatihan: id, kode: kode }, { retry: 5 }); }
+      catch (e) { return salah(e); }
+    }
+    tampil(d);
   },
 
   // ===========================================================
