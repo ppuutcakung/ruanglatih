@@ -389,6 +389,23 @@ button.item:hover, a.item:hover { background: var(--blush-1); }
 .picker { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .picker .select { height: 44px; min-width: 260px; max-width: 100%; width: auto; background-color: #fff; }
 .chart { width: 100%; height: auto; overflow: visible; }
+/* Grafik batang HTML: tulisan ukuran tetap, nama maks 2 baris, geser ke samping di layar sempit */
+.gb { margin-top: 10px; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
+.gb-y { position: relative; min-width: 22px; }
+.gb-y span { position: absolute; right: 0; transform: translateY(50%); font-size: 11px; line-height: 1; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gb-geser { overflow-x: auto; overflow-y: hidden; padding-top: 18px; margin-top: -18px; scrollbar-width: thin; }
+.gb-plot { position: relative; }
+.gb-garis i { position: absolute; left: 0; right: 0; border-top: 1px dashed #F1DCE1; }
+.gb-garis i.nol { border-top: 1px solid var(--blush-3); }
+.gb-kols, .gb-x { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.gb-kols { position: absolute; inset: 0; }
+.gb-kol { display: flex; align-items: flex-end; justify-content: center; gap: 3px; height: 100%; padding: 0 6px; }
+.gb-bar { flex: 0 1 26px; min-width: 8px; border-radius: 4px 4px 0 0; position: relative; transition: filter .15s; }
+.gb-bar.kosong { height: 0; }
+.gb-bar:hover { filter: brightness(1.08); }
+.gb-bar:hover::after { content: attr(data-v); position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -4px); font-size: 11px; font-weight: 700; color: var(--ink); background: #fff; border: 1px solid var(--blush-2); border-radius: 6px; padding: 1px 6px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+.gb-x span { font-size: 11px; line-height: 1.3; color: var(--ink-2); text-align: center; padding: 8px 4px 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.gb + .legend { margin-top: 12px; }
 .chart text { font-family: var(--font); fill: var(--ink-2); font-size: 11px; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }

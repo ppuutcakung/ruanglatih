@@ -502,31 +502,31 @@ const UI = {
   },
 
   // ---------- Grafik SVG ----------
-  /** Grafik batang berkelompok. series: [{nama, warna, nilai:[..]}] */
+  /**
+   * Grafik batang berkelompok (HTML/CSS) — tulisan berukuran tetap di layar apa pun:
+   * nama di bawah batang dibungkus maks. 2 baris (nama lengkap muncul saat disentuh/diarahkan),
+   * layar sempit → grafik bisa digeser ke samping, bukan saling tumpuk.
+   * series: [{nama, warna, nilai:[..]}] · o.maks (opsional) · o.h tinggi area (px)
+   */
   grafikBatang(o) {
-    const W = o.w || 640, H = o.h || 240, L = 34, B = 42, T = 12, R = 8;
-    const labels = o.labels || [];
-    const maks = o.maks || Math.max(10, ...o.series.flatMap(s => s.nilai.map(v => +v || 0)));
-    const lw = (W - L - R) / Math.max(1, labels.length);
-    const bw = Math.min(26, (lw - 10) / o.series.length);
-    const y = v => T + (H - T - B) * (1 - (Math.min(v, maks) / maks));
-    let g = '';
-    for (let i = 0; i <= 4; i++) {
-      const v = maks * i / 4, yy = y(v);
-      g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="#F3DEE3" stroke-dasharray="' + (i ? '3 4' : '') + '"/><text x="' + (L - 6) + '" y="' + (yy + 4) + '" text-anchor="end">' + Math.round(v) + '</text>';
-    }
-    labels.forEach((lb, i) => {
-      const x0 = L + i * lw + (lw - bw * o.series.length) / 2;
-      o.series.forEach((s, j) => {
-        const v = s.nilai[i];
-        if (v === null || v === undefined) return;
-        const yy = y(+v), h = H - B - yy;
-        g += '<rect x="' + (x0 + j * bw + 1) + '" y="' + yy + '" width="' + (bw - 2) + '" height="' + Math.max(1, h) + '" rx="4" fill="' + s.warna + '"><title>' + esc(s.nama + ' · ' + lb + ': ' + UI.angka(+v)) + '</title></rect>';
-      });
-      const t = String(lb).length > 14 ? String(lb).slice(0, 13) + '…' : lb;
-      g += '<text x="' + (L + i * lw + lw / 2) + '" y="' + (H - B + 16) + '" text-anchor="middle">' + esc(t) + '</text>';
-    });
-    return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img">' + g + '</svg>' +
+    const labels = o.labels || [], n = Math.max(1, labels.length), ns = Math.max(1, o.series.length), H = o.h || 220;
+    const tertinggi = Math.max(0, ...o.series.flatMap(s => s.nilai.map(v => +v || 0)));
+    const rapi = x => { const k = Math.max(1, x / 4), p = Math.pow(10, Math.floor(Math.log10(k))), st = [1, 2, 5, 10].map(m => m * p).find(v => v >= k); return st * 4; }; // garis bantu berangka bulat
+    const maks = o.maks || rapi(tertinggi || 4);
+    const tik = [0, 1, 2, 3, 4].map(i => maks * i / 4);
+    const fmt = v => UI.angka(Math.round(v * 10) / 10);
+    const lebarKol = o.kol || Math.max(56, ns * 22 + 18);
+    const yAx = '<div class="gb-y" style="height:' + H + 'px">' + tik.map(v => '<span style="bottom:' + (v / maks * 100) + '%">' + fmt(v) + '</span>').join('') + '</div>';
+    const garis = tik.map((v, i) => '<i style="bottom:' + (v / maks * 100) + '%"' + (i ? '' : ' class="nol"') + '></i>').join('');
+    const kol = labels.map((lb, i) => '<div class="gb-kol">' + o.series.map(s => {
+      const v = s.nilai[i];
+      if (v === null || v === undefined || v === '') return '<span class="gb-bar kosong" title="' + esc(s.nama + ' · ' + lb + ': belum ada') + '"></span>';
+      return '<span class="gb-bar" style="height:' + Math.max(0.8, Math.min(+v, maks) / maks * 100) + '%;background:' + s.warna + '" data-v="' + esc(fmt(+v)) + '" title="' + esc(s.nama + ' · ' + lb + ': ' + fmt(+v)) + '"></span>';
+    }).join('') + '</div>').join('');
+    const xAx = labels.map(lb => '<span title="' + esc(lb) + '">' + esc(lb) + '</span>').join('');
+    return '<div class="gb">' + yAx + '<div class="gb-geser"><div class="gb-isi" style="--n:' + n + ';min-width:' + (n * lebarKol) + 'px">' +
+      '<div class="gb-plot" style="height:' + H + 'px"><div class="gb-garis">' + garis + '</div><div class="gb-kols">' + kol + '</div></div>' +
+      '<div class="gb-x">' + xAx + '</div></div></div></div>' +
       '<div class="legend mt8">' + o.series.map(s => '<span><i style="background:' + s.warna + '"></i>' + esc(s.nama) + '</span>').join('') + '</div>';
   },
   /** Grafik garis. series: [{nama, warna, nilai:[..]}] */
