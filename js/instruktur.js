@@ -34,7 +34,7 @@ const Instruktur = {
     if (L) {
       const p = L.pelatihan, pct = L.jumlah_peserta ? Math.round(L.hadir_hari_ini / L.jumlah_peserta * 100) : 0;
       hero = '<div class="card" style="padding:24px"><div class="row wrap g8">' +
-        (p.status === 'berlangsung' ? '<span class="live-dot">LIVE Hari ' + L.hari_ke + ' dari ' + p.jumlah_hari + '</span>' : UI.chipStatus(p.status)) +
+        (p.status === 'berlangsung' ? '<span class="live-dot">LIVE Hari ' + L.hari_ke + ' dari ' + p.jumlah_hari + '</span>' : UI.chipStatus(p.status, p.terkunci)) +
         '<span class="chip line">' + UI.ic('pin', 'sm') + '<span class="clamp1" style="max-width:260px">' + esc(p.format === 'online' ? 'Online' : p.lokasi_atau_link) + '</span></span>' +
         '<span class="chip line">' + UI.ic('users', 'sm') + L.jumlah_peserta + ' Peserta Terdaftar</span>' +
         (p.link_dokumentasi ? '<a class="chip info" href="' + esc(p.link_dokumentasi) + '" target="_blank" rel="noopener">' + UI.ic('image', 'sm') + 'Dokumentasi</a>' : '') + '</div>' +
@@ -87,7 +87,7 @@ const Instruktur = {
       '<div class="card stat"><span class="l">Selesai</span><span class="v">' + rows.filter(p => p.status === 'selesai').length + '</span></div>' +
       '<div class="card stat"><span class="l">Total peserta</span><span class="v">' + rows.reduce((s, p) => s + p.jumlah_peserta, 0) + '</span></div></div>' +
       '<div class="card mt20"><div class="list">' + rows.map(p => '<button class="item" data-aksi="buka" data-id="' + esc(p.id_pelatihan) + '"><div class="ic-tile">' + UI.ic('cap') + '</div><div class="grow"><div class="row g8 wrap"><span class="semi">' + esc(p.judul) + '</span>' + UI.chipSektor(p) + '</div>' +
-        '<div class="meta"><span>' + esc(UI.rentang(p)) + ' (' + p.jumlah_hari + ' hari)</span><span>' + p.jumlah_peserta + '/' + p.kuota + ' peserta</span><span>' + esc(p.format) + '</span></div></div>' + UI.chipStatus(p.status) + UI.ic('chevR', 'sm') + '</button>').join('') + '</div></div>';
+        '<div class="meta"><span>' + esc(UI.rentang(p)) + ' (' + p.jumlah_hari + ' hari)</span><span>' + p.jumlah_peserta + '/' + p.kuota + ' peserta</span><span>' + esc(p.format) + '</span></div></div>' + UI.chipStatus(p.status, p.terkunci) + UI.ic('chevR', 'sm') + '</button>').join('') + '</div></div>';
     UI.klik(isi, { buka: b => this.detail(b.dataset.id) });
   },
 

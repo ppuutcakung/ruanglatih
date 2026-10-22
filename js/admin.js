@@ -102,7 +102,7 @@ const Admin = {
     const stats = '<div class="grid g4">' +
       kartu('Akumulasi Peserta', R.peserta_baru ? '<span class="chip sm">+' + R.peserta_baru + ' bulan ini</span>' : '<span class="chip line sm">' + R.umkm_unik + ' UMKM</span>', R.peserta, '<div class="row g4 wrap">' + SEKTOR.map(s => '<span class="chip line sm">' + sk[s] + ' ' + (R.per_sektor[s] || 0) + '</span>').join('') + '</div>') +
       kartu('Pelatihan & Kelulusan', '<span class="chip ok sm">' + R.lulus + ' lulus</span>', R.pelatihan, 'program · ' + R.lulus + ' dari ' + R.peserta + ' peserta lulus (' + (R.peserta ? Math.round(R.lulus / R.peserta * 100) : 0) + '%)') +
-      kartu('Rata-rata Kehadiran', L && d.ytd && R.kehadiran_live !== null ? '<span class="chip ok sm">Live ' + UI.angka(R.kehadiran_live) + '%</span>' : '', R.kehadiran === null ? '–' : UI.angka(R.kehadiran) + '%', R.hadir_total + ' dari ' + R.hari_total + ' hari-peserta hadir', 'c-primary') +
+      kartu('Rata-rata Kehadiran', L && d.ytd && R.kehadiran_live !== null ? '<span class="chip ok sm">Live ' + UI.angka(R.kehadiran_live) + '%</span>' : '', R.kehadiran === null ? '–' : UI.angka(R.kehadiran) + '%', R.peserta_total === undefined ? R.hadir_total + ' dari ' + R.hari_total + ' hari-peserta hadir' : R.hadir_total + ' dari ' + R.peserta_total + ' peserta hadir · ' + R.tidak_hadir_total + ' tidak hadir', 'c-primary') +
       kartu('Tugas & Materi', R.tugas_menunggu ? '<span class="chip warn sm">' + R.tugas_menunggu + ' perlu cek</span>' : '<span class="chip ok sm">Beres</span>', R.tugas_masuk, 'berkas tugas masuk · ' + R.materi + ' modul PDF') + '</div>';
 
     let live = '';
@@ -111,7 +111,7 @@ const Admin = {
       const st = (judul, kunci, buka, nilai, ket, kunciTogel) => '<div class="stage ' + (buka ? 'on' : '') + '"><div class="row between"><span class="semi t-sm c-primary">' + judul + '</span>' + this.togel(kunciTogel || kunci, buka, p.id_pelatihan) + '</div>' +
         '<div class="h-md">' + nilai + '</div><div class="t-xs ' + (buka ? 'c-ok semi' : 'muted') + '">' + ket + '</div></div>';
       live = '<div class="card" style="padding:0"><div class="row between wrap" style="padding:18px 20px;border-bottom:1px solid var(--blush-2)"><div class="row wrap g8">' +
-        (p.status === 'berlangsung' ? '<span class="live-dot">LIVE</span>' : UI.chipStatus(p.status)) + '<a class="h-md" style="color:inherit" href="#/pelatihan/' + esc(p.id_pelatihan) + '">' + esc(p.judul) + '</a>' +
+        (p.status === 'berlangsung' ? '<span class="live-dot">LIVE</span>' : UI.chipStatus(p.status, p.terkunci)) + '<a class="h-md" style="color:inherit" href="#/pelatihan/' + esc(p.id_pelatihan) + '">' + esc(p.judul) + '</a>' +
         '<span class="t-sm muted">· ' + esc(p.instruktur) + ' · ' + esc(p.format === 'online' ? 'Online' : p.lokasi_atau_link) + ' (' + n + ' Peserta)</span></div><span class="chip line">Hari ' + L.hari_ke + ' dari ' + p.jumlah_hari + '</span></div>' +
         '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));padding:20px" data-stage>' +
         st('Absensi Hari ' + L.hari_ke, 'absen', L.absen.buka, L.absen.hadir + ' / ' + n, n ? Math.round(L.absen.hadir / n * 100) + '% hadir' : '-', 'absen_' + L.hari_ke) +
@@ -130,7 +130,7 @@ const Admin = {
         '<div class="seg pill" data-tab>' + [['semua', 'Semua (' + d.rekap.length + ')'], ['berlangsung', 'Berjalan (' + n('berlangsung') + ')'], ['selesai', 'Selesai (' + n('selesai') + ')'], ['datang', 'Akan Datang (' + n('datang') + ')']].map(x => '<button data-v="' + x[0] + '" class="' + (tab === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div></div>' +
         (rows.length ? '<div class="list">' + rows.slice((hal - 1) * per, hal * per).map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" style="color:inherit"><div class="ic-tile">' + UI.ic('cap') + '</div><div class="grow"><div class="row g8 wrap"><span class="semi clamp1" style="max-width:340px">' + esc(p.judul) + '</span>' + UI.chipSektor(p) + '</div>' +
           '<div class="meta"><span>' + esc(p.instruktur) + '</span><span>' + esc(UI.rentang(p)) + ' (' + p.jumlah_hari + ' Hari)</span></div></div>' +
-          '<div class="right" style="min-width:90px"><div class="semi num">' + (p.status === 'akan datang' ? p.jumlah_peserta + ' / ' + p.kuota : p.hadir_penuh + ' / ' + p.jumlah_peserta) + '</div><div class="t-xs muted">' + (p.status === 'akan datang' ? 'Pendaftar / kuota' : 'Hadir penuh') + '</div></div>' + UI.chipStatus(p.status) + '</a>').join('') + '</div>' + UI.halaman(rows.length, hal, per)
+          '<div class="right" style="min-width:90px"><div class="semi num">' + (p.status === 'akan datang' ? p.jumlah_peserta + ' / ' + p.kuota : p.hadir_penuh + ' / ' + p.jumlah_peserta) + '</div><div class="t-xs muted">' + (p.status === 'akan datang' ? 'Pendaftar / kuota' : 'Hadir penuh') + '</div></div>' + UI.chipStatus(p.status, p.terkunci) + '</a>').join('') + '</div>' + UI.halaman(rows.length, hal, per)
           : UI.kosong('Belum ada pelatihan di kategori ini.', 'cap'));
     };
     const evalBox = '<div class="card"><div class="card-h"><div class="ttl"><div class="ic-tile sm">' + UI.ic('trend', 'sm') + '</div><span class="h-md">Rerata Evaluasi</span></div></div>' +
@@ -168,7 +168,7 @@ const Admin = {
       const t = rows.filter(p => (f === 'semua' || p.status === f) && (!q || (p.judul + ' ' + p.instruktur + ' ' + p.tema).toLowerCase().indexOf(q) >= 0));
       $('[data-list]', isi).innerHTML = t.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Pelatihan</th><th>Jadwal</th><th>Instruktur</th><th class="num">Peserta</th><th>Status</th><th></th></tr></thead><tbody>' +
         t.map(p => '<tr style="cursor:pointer" data-buka="' + esc(p.id_pelatihan) + '"><td><div class="semi">' + esc(p.judul) + '</div><div class="row g4 mt8">' + UI.chipSektor(p) + '<span class="chip line sm">' + esc(p.format) + '</span></div></td>' +
-          '<td><div>' + esc(UI.rentang(p)) + '</div><div class="t-xs muted">' + p.jumlah_hari + ' hari · ' + esc(p.jam) + '</div></td><td>' + esc(p.instruktur) + '</td><td class="num">' + p.jumlah_peserta + ' / ' + p.kuota + '</td><td>' + UI.chipStatus(p.status) + '</td><td>' + UI.ic('chevR', 'sm') + '</td></tr>').join('') + '</tbody></table></div>'
+          '<td><div>' + esc(UI.rentang(p)) + '</div><div class="t-xs muted">' + p.jumlah_hari + ' hari · ' + esc(p.jam) + '</div></td><td>' + esc(p.instruktur) + '</td><td class="num">' + p.jumlah_peserta + ' / ' + p.kuota + '</td><td>' + UI.chipStatus(p.status, p.terkunci) + '</td><td>' + UI.ic('chevR', 'sm') + '</td></tr>').join('') + '</tbody></table></div>'
         : UI.kosong(rows.length ? 'Tidak ada pelatihan yang cocok.' : 'Belum ada pelatihan. Klik "Buat Pelatihan".', 'cap');
     };
     const muat = async () => {
@@ -233,7 +233,7 @@ const Admin = {
         { name: 'cakupan', label: 'Cakupan', type: 'seg', value: p.cakupan, options: [['umum', 'Umum (semua sektor)'], ['sektor', 'Khusus sektor']] },
         { name: 'sektor', label: 'Sektor', type: 'select', value: p.sektor || SEKTOR[0], options: SEKTOR, hidden: p.cakupan !== 'sektor' },
         { name: 'jumlah_hari', label: 'Jumlah hari (wajib)', type: 'seg', value: p.jumlah_hari, options: [['1', '1 Hari'], ['2', '2 Hari']] },
-        { name: 'status', label: 'Status', type: 'select', value: p.status, options: [['akan datang', 'Akan Datang'], ['berlangsung', 'Berlangsung'], ['selesai', 'Selesai']] },
+        { name: 'info_status', label: 'Status', type: 'html', html: '<div class="hint" style="padding-top:6px">Otomatis mengikuti tanggal: <b>Akan Datang</b> → <b>Berlangsung</b> (Hari 1 s.d. hari terakhir) → <b>Selesai</b> (setelah hari terakhir, data terkunci).</div>' },
         { name: 'tanggal_mulai', label: 'Tanggal Hari 1', type: 'date', value: p.tanggal_mulai },
         { name: 'tanggal_selesai', label: 'Tanggal Hari 2', type: 'date', value: +p.jumlah_hari === 2 ? p.tanggal_selesai : '', hidden: +p.jumlah_hari !== 2 },
         { name: 'jam', label: 'Jam', value: p.jam || '09.00–15.00 WIB' },
@@ -277,8 +277,12 @@ const Admin = {
       const p = d.pelatihan;
       const lulus = d.peserta.filter(x => x.lulus).length;
       isi.innerHTML = '<div class="page-h"><div><div class="crumb"><a href="#/pelatihan">Pelatihan</a> › ' + esc(p.id_pelatihan) + '</div><div class="h-lg">' + esc(p.judul) + '</div>' +
-        '<div class="row wrap g8 mt8">' + UI.chipStatus(p.status) + UI.chipSektor(p) + '<span class="chip line">' + UI.ic('calendar', 'sm') + esc(UI.rentang(p)) + ' · ' + p.jumlah_hari + ' hari</span><span class="chip line">' + UI.ic('user', 'sm') + esc(p.instruktur) + '</span></div></div>' +
-        '<div class="row wrap g8"><button class="btn outline sm" data-aksi="flyer">' + UI.ic('image', 'sm') + 'Flyer</button><button class="btn secondary sm" data-aksi="ubah">' + UI.ic('edit', 'sm') + 'Ubah</button><button class="btn danger sm" data-aksi="hapusP">' + UI.ic('trash', 'sm') + '</button></div></div>' +
+        '<div class="row wrap g8 mt8">' + UI.chipStatus(p.status, p.terkunci) + UI.chipSektor(p) + '<span class="chip line">' + UI.ic('calendar', 'sm') + esc(UI.rentang(p)) + ' · ' + p.jumlah_hari + ' hari</span><span class="chip line">' + UI.ic('user', 'sm') + esc(p.instruktur) + '</span></div></div>' +
+        '<div class="row wrap g8">' + (p.terkunci
+          ? '<button class="btn outline sm" data-aksi="bukaP">' + UI.ic('key', 'sm') + 'Buka Kembali</button>'
+          : '<button class="btn outline sm" data-aksi="flyer">' + UI.ic('image', 'sm') + 'Flyer</button><button class="btn secondary sm" data-aksi="ubah">' + UI.ic('edit', 'sm') + 'Ubah</button><button class="btn outline sm" data-aksi="tutupP">' + UI.ic('lock', 'sm') + 'Tutup Pelatihan</button>') +
+          '<button class="btn danger sm" data-aksi="hapusP">' + UI.ic('trash', 'sm') + '</button></div></div>' +
+        (p.terkunci ? Kelola.spandukKunci(p) : '') +
         '<div class="grid g4 mt20"><div class="card stat"><span class="l">Peserta</span><span class="v">' + d.peserta.length + ' <span class="t-sm muted">/ ' + p.kuota + '</span></span></div>' +
         '<div class="card stat"><span class="l">Hadir penuh</span><span class="v">' + d.peserta.filter(x => x.hadir >= x.jumlah_hari).length + '</span></div>' +
         '<div class="card stat"><span class="l">Memenuhi syarat lulus</span><span class="v c-ok">' + lulus + '</span></div>' +
@@ -296,6 +300,14 @@ const Admin = {
         try { const r = await API.call('pelatihan_hapus', { id_pelatihan: id }); UI.toast(r.message); Kelola.segarkanPel(); location.hash = '#/pelatihan'; } catch (e) { UI.gagal(e); }
       },
       flyer: b => this.unggahFlyer(b, id, muat),
+      tutupP: async b => {
+        if (!await UI.konfirmasi('Tutup pelatihan <b>' + esc(d.pelatihan.judul) + '</b>?<br><br>Semua aktivitas (absen, tes, tugas, evaluasi) ditutup dan <b>seluruh data terkunci</b>: tidak bisa ditambah, diubah, atau dihapus. Laporan PDF & Excel tetap bisa diekspor.', { ok: 'Tutup Pelatihan', bahaya: true })) return;
+        try { await UI.sibuk(b, async () => { const r = await API.call('pelatihan_tutup', { id_pelatihan: id, tutup: true }); UI.toast(r.message); }); muat(); } catch (e) { UI.gagal(e); }
+      },
+      bukaP: async b => {
+        if (!await UI.konfirmasi('Buka kembali pelatihan <b>' + esc(d.pelatihan.judul) + '</b> untuk koreksi data (mis. nilai tugas yang terlambat)? Tutup lagi setelah selesai.', { ok: 'Buka Kembali' })) return;
+        try { await UI.sibuk(b, async () => { const r = await API.call('pelatihan_tutup', { id_pelatihan: id, tutup: false }); UI.toast(r.message); }); muat(); } catch (e) { UI.gagal(e); }
+      },
       daftar: () => this.modalDaftarkan(d, muat),
       keluar: async b => {
         const x = d.peserta.find(y => y.id_umkm === b.dataset.id);
@@ -639,7 +651,7 @@ const Admin = {
     UI.loading(box, 1);
     try {
       const pel = (await Kelola.daftarPel()).filter(p => p.id_instruktur === i.id_instruktur);
-      box.innerHTML = pel.length ? '<div class="list">' + pel.map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" data-tutup style="color:inherit"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow"><div class="semi">' + esc(p.judul) + '</div><div class="meta"><span>' + esc(UI.rentang(p)) + ' (' + p.jumlah_hari + ' hari)</span><span>' + p.jumlah_peserta + ' peserta</span></div></div>' + UI.chipStatus(p.status) + '</a>').join('') + '</div>'
+      box.innerHTML = pel.length ? '<div class="list">' + pel.map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" data-tutup style="color:inherit"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow"><div class="semi">' + esc(p.judul) + '</div><div class="meta"><span>' + esc(UI.rentang(p)) + ' (' + p.jumlah_hari + ' hari)</span><span>' + p.jumlah_peserta + ' peserta</span></div></div>' + UI.chipStatus(p.status, p.terkunci) + '</a>').join('') + '</div>'
         : UI.kosong('Belum pernah mengampu pelatihan.', 'cap');
     } catch (e) { UI.galat(box, e); }
   },
@@ -714,7 +726,7 @@ const Admin = {
       const lulus = rows.filter(r => r.lulus).length, hadir = rows.reduce((s, r) => s + r.hadir, 0), hari = rows.reduce((s, r) => s + r.jumlah_hari, 0);
       box.innerHTML = rows.length ? '<div class="grid g3" style="margin-bottom:14px"><div class="card well tight center"><div class="t-xs muted">Pelatihan diikuti</div><div class="h-lg c-primary">' + rows.length + '</div></div>' +
         '<div class="card well tight center"><div class="t-xs muted">Lulus</div><div class="h-lg c-ok">' + lulus + '</div></div><div class="card well tight center"><div class="t-xs muted">Kehadiran</div><div class="h-lg">' + (hari ? Math.round(hadir / hari * 100) : 0) + '%</div></div></div>' +
-        '<div class="list">' + rows.map(r => '<a class="item" href="#/pelatihan/' + esc(r.id_pelatihan) + '" data-tutup style="color:inherit;align-items:flex-start;flex-wrap:wrap"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow" style="min-width:200px"><div class="row g8 wrap"><span class="semi">' + esc(r.judul) + '</span>' + UI.chipStatus(r.status) + '</div>' +
+        '<div class="list">' + rows.map(r => '<a class="item" href="#/pelatihan/' + esc(r.id_pelatihan) + '" data-tutup style="color:inherit;align-items:flex-start;flex-wrap:wrap"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow" style="min-width:200px"><div class="row g8 wrap"><span class="semi">' + esc(r.judul) + '</span>' + UI.chipStatus(r.status, r.terkunci) + '</div>' +
           '<div class="meta"><span>' + esc(String(r.tanggal).replace(/\d{4}-\d{2}-\d{2}/g, x => UI.tglPendek(x))) + '</span><span>' + esc(r.instruktur) + '</span>' + (r.nama_peserta ? '<span>Peserta: ' + esc(r.nama_peserta) + ' (perwakilan)</span>' : '') + '</div>' +
           '<div class="meta mt8"><span>Hadir ' + r.hadir + '/' + r.jumlah_hari + '</span><span>Pre ' + UI.angka(r.pre) + ' → Post ' + UI.angka(r.post) + (r.kenaikan !== null ? ' (' + (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan) + ')' : '') + '</span><span>Tugas ' + r.tugas_kumpul + '/' + r.tugas_total + '</span>' + '</div></div>' +
           '<div class="col g4" style="align-items:flex-end">' + UI.chipLulus(r.lulus) + '</div></a>').join('') + '</div>'
@@ -1400,7 +1412,7 @@ const Admin = {
         M = mat.filter(m => cocok(m.judul + ' ' + m.pelatihan)), I = ins.filter(i => cocok(i.nama + ' ' + i.institusi + ' ' + i.no_hp));
       const blok = (judul, n, isiHtml) => '<div class="card"><div class="card-h"><div class="h-sm">' + judul + '</div><span class="chip sm">' + n + '</span></div>' + (n ? '<div class="list">' + isiHtml + '</div>' : '<div class="t-sm muted">Tidak ada hasil.</div>') + '</div>';
       isi.innerHTML = '<div class="col g20">' +
-        blok('Pelatihan', P.length, P.slice(0, 10).map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" style="color:inherit"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow"><div class="semi">' + esc(p.judul) + '</div><div class="t-xs muted">' + esc(UI.rentang(p)) + ' · ' + esc(p.instruktur) + '</div></div>' + UI.chipStatus(p.status) + '</a>').join('')) +
+        blok('Pelatihan', P.length, P.slice(0, 10).map(p => '<a class="item" href="#/pelatihan/' + esc(p.id_pelatihan) + '" style="color:inherit"><div class="ic-tile sm">' + UI.ic('cap', 'sm') + '</div><div class="grow"><div class="semi">' + esc(p.judul) + '</div><div class="t-xs muted">' + esc(UI.rentang(p)) + ' · ' + esc(p.instruktur) + '</div></div>' + UI.chipStatus(p.status, p.terkunci) + '</a>').join('')) +
         blok('Peserta UMKM', U.length, U.slice(0, 10).map(u => '<a class="item" href="#/peserta" style="color:inherit"><div class="ic-tile sm">' + UI.ic('store', 'sm') + '</div><div class="grow"><div class="semi">' + esc(u.nama_umkm) + '</div><div class="t-xs muted">' + esc(u.nama_pemilik) + ' · ' + esc(u.sektor) + ' · ' + esc(u.no_hp) + '</div></div><span class="t-xs muted">' + u.jumlah_pelatihan + ' pelatihan</span></a>').join('')) +
         blok('Materi', M.length, M.slice(0, 10).map(m => '<a class="item" href="' + esc(m.url_lihat) + '" target="_blank" rel="noopener" style="color:inherit"><div class="ic-tile sm">' + UI.ic('file', 'sm') + '</div><div class="grow"><div class="semi">' + esc(m.judul) + '</div><div class="t-xs muted">' + esc(m.pelatihan) + ' · ' + UI.ukuran(m.ukuran) + '</div></div></a>').join('')) +
         blok('Instruktur', I.length, I.slice(0, 10).map(i => '<a class="item" href="#/instruktur" style="color:inherit"><div class="ic-tile sm">' + UI.ic('user', 'sm') + '</div><div class="grow"><div class="semi">' + esc(i.nama) + '</div><div class="t-xs muted">' + esc(i.institusi || '-') + '</div></div></a>').join('')) + '</div>';

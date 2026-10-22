@@ -31,7 +31,7 @@ const BACA = {
 const TULIS = {
   materi_hapus: 'materi', upload_chunk: 'materi', materi_unggah: 'materi', soal_simpan: 'soal', soal_simpan_banyak: 'soal', soal_hapus: 'soal', tugas_simpan: 'tugas', tugas_lampiran: 'tugas', p_hapus_tugas: 'tugas', tugas_hapus: 'tugas', tugas_nilai: 'tugas',
   umkm_simpan: 'umkm', umkm_reset_pin: 'umkm', umkm_status: 'umkm', umkm_import: 'umkm', instruktur_simpan: 'ins',
-  pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
+  pelatihan_simpan: 'pel draft', draft_simpan: 'draft', draft_hapus: 'draft', pelatihan_hapus: 'pel', pelatihan_tutup: 'pel', pelatihan_flyer: 'pel', peserta_daftarkan: 'reg', peserta_hapus: 'reg',
   aktivitas_set: 'pel', syarat_set: 'pel', eval_simpan_form: 'eval', eval_salin: 'eval', pengaturan_simpan: 'set',
   admin_simpan: 'admin', admin_hapus: 'admin', 
   p_absen: 'absen', qr_absen: 'absen', qr_kode: 'pel', p_kirim_tes: 'tes', p_kumpul_tugas: 'tugas', p_kirim_eval: 'eval', ganti_password: 'admin'

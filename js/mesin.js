@@ -2,7 +2,7 @@
    RuangLatih — mesin.js  (DIBANGUN OTOMATIS — jangan diedit manual)
    Logika backend yang sama dengan GAS, dijalankan di browser di atas
    salinan data Firestore (mode Firebase). Sumber: Kode/Pelatihan/Admin/
-   Peserta/Laporan/Cermin.gs · dibangun 2026-10-20
+   Peserta/Laporan/Cermin.gs · dibangun 2026-10-22
    ============================================================= */
 var MESIN = (function () {
 
@@ -85,7 +85,7 @@ const SKEMA = {
   UMKM: ['id_umkm', 'nama_umkm', 'nama_pemilik', 'sektor', 'spesialisasi', 'no_hp', 'alamat', 'pin', 'wajib_ganti_pin', 'status_akun', 'tgl_dibuat', 'gender'],
   Instruktur: ['id_instruktur', 'nama', 'kode_akses', 'tema_diajar', 'status', 'institusi', 'no_hp'],
   Admin: ['username', 'password_hash', 'nama'],
-  Pelatihan: ['id_pelatihan', 'judul', 'tema', 'cakupan', 'sektor', 'id_instruktur', 'jumlah_hari', 'tanggal_mulai', 'tanggal_selesai', 'jam', 'format', 'lokasi_atau_link', 'kuota', 'status', 'id_flyer', 'status_aktivitas', 'syarat_lulus', 'id_template_sertifikat', 'tgl_dibuat', 'link_dokumentasi'],
+  Pelatihan: ['id_pelatihan', 'judul', 'tema', 'cakupan', 'sektor', 'id_instruktur', 'jumlah_hari', 'tanggal_mulai', 'tanggal_selesai', 'jam', 'format', 'lokasi_atau_link', 'kuota', 'status', 'id_flyer', 'status_aktivitas', 'syarat_lulus', 'id_template_sertifikat', 'tgl_dibuat', 'link_dokumentasi', 'penutupan', 'tgl_ditutup'],
   Peserta_Pelatihan: ['id_pelatihan', 'id_umkm', 'status_lulus', 'no_sertifikat', 'id_file_sertifikat', 'tgl_daftar', 'nama_peserta', 'gender_peserta', 'hp_peserta'],
   Materi: ['id_materi', 'id_pelatihan', 'judul', 'cakupan', 'sektor', 'id_file', 'ukuran_file', 'urutan', 'diunggah_oleh', 'tgl', 'tipe_file'],
   Bank_Soal: ['id_soal', 'id_pelatihan', 'jenis', 'pertanyaan', 'opsi_a', 'opsi_b', 'opsi_c', 'opsi_d', 'opsi_e', 'kunci', 'urutan'],
@@ -175,7 +175,7 @@ function aksiMulti(d, sesi) {
 // Peta aksi → fungsi. Dibuat di dalam fungsi agar fungsi di file lain sudah terdefinisi.
 function rute() {
   const A = ['admin'], I = ['instruktur'], P = ['peserta'], AI = ['admin', 'instruktur'], SEMUA = ['admin', 'instruktur', 'peserta'];
-  return {
+  const R = {
     // --- Sesi & akun
     login: { fn: aksiLogin },
     sesi: { peran: SEMUA, fn: aksiSesi, gp: true },
@@ -223,6 +223,7 @@ function rute() {
     instruktur_simpan: { peran: A, fn: aksiInstrukturSimpan },
     pelatihan_simpan: { peran: A, fn: aksiPelatihanSimpan },
     pelatihan_hapus: { peran: A, fn: aksiPelatihanHapus },
+    pelatihan_tutup: { peran: A, fn: aksiPelatihanTutup },
     draft_list: { peran: A, fn: aksiDraftList },
     draft_simpan: { peran: A, fn: aksiDraftSimpan },
     draft_hapus: { peran: A, fn: aksiDraftHapus },
@@ -263,6 +264,12 @@ function rute() {
     p_riwayat: { peran: P, fn: aksiPRiwayat },
 
   };
+  // Aksi yang mengubah data sebuah pelatihan → ditolak bila pelatihan ditutup / sudah berakhir
+  ['pelatihan_simpan', 'pelatihan_flyer', 'peserta_daftarkan', 'peserta_ubah', 'peserta_hapus', 'aktivitas_set', 'syarat_set',
+    'eval_simpan_form', 'eval_salin', 'materi_unggah', 'upload_init', 'materi_hapus', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus',
+    'tugas_simpan', 'tugas_lampiran', 'tugas_hapus', 'tugas_nilai', 'p_absen', 'qr_absen', 'p_kirim_tes', 'p_kumpul_tugas', 'p_hapus_tugas', 'p_kirim_eval']
+    .forEach(a => { if (R[a]) R[a].fn = jagaKunci(R[a].fn); });
+  return R;
 }
 
 // ============================================
@@ -702,18 +709,56 @@ function aksiGantiPassword(d, s) {
 // ============================================
 // HELPER PELATIHAN (dipakai semua file)
 // ============================================
+/** Status menurut tanggal: sebelum Hari 1 → akan datang; Hari 1 s.d. hari terakhir → berlangsung; sesudahnya → selesai. */
+let _hiC = '', _hiT = 0;
+function statusMenurutTanggal(awal, akhir, cadangan) {
+  if (!awal) return cadangan || 'akan datang';
+  if (!_hiC || Date.now() - _hiT > 60000) { _hiC = hariIni(); _hiT = Date.now(); }
+  return _hiC < awal ? 'akan datang' : _hiC <= (akhir || awal) ? 'berlangsung' : 'selesai';
+}
+/**
+ * Pelatihan terkunci (hanya bisa dilihat & diekspor) bila ditutup admin, atau sudah lewat hari terakhir
+ * kecuali admin membukanya kembali (penutupan = 'dibuka').
+ */
+function terkunci(p) { return !!p && (p.penutupan === 'ditutup' || (p.status_tanggal === 'selesai' && p.penutupan !== 'dibuka')); }
 function parsePel(p) {
   if (!p) return null;
   const n = parseInt(p.jumlah_hari, 10) === 2 ? 2 : 1;
   const tgl = n === 2 ? [p.tanggal_mulai, p.tanggal_selesai] : [p.tanggal_mulai];
-  return Object.assign({}, p, {
+  const stTgl = statusMenurutTanggal(tgl[0], tgl[tgl.length - 1], p.status);
+  const o = Object.assign({}, p, {
+    status_tanggal: stTgl,
+    status: p.penutupan === 'ditutup' ? 'selesai' : stTgl, // status otomatis mengikuti tanggal
+    penutupan: p.penutupan || '',
     jumlah_hari: n,
     kuota: parseInt(p.kuota, 10) || 0,
     tanggal_hari: tgl,
     aktivitas: pj(p.status_aktivitas, {}),
     syarat: Object.assign(syaratDefault(), pj(p.syarat_lulus, {}))
   });
+  o.terkunci = terkunci(o);
+  return o;
 }
+
+// ---------- Kunci pelatihan: semua perubahan ditolak bila pelatihan ditutup / sudah berakhir ----------
+/** ID pelatihan yang disentuh sebuah aksi. */
+function idPelDari(d) {
+  d = d || {};
+  if (d.id_pelatihan) return d.id_pelatihan;
+  if (d.ke) return d.ke; // salin form evaluasi
+  if (d.id_tugas) { const t = DB.find('Tugas', x => x.id_tugas === d.id_tugas); return t ? t.id_pelatihan : ''; }
+  if (d.id_soal) { const q = DB.find('Bank_Soal', x => x.id_soal === d.id_soal); return q ? q.id_pelatihan : ''; }
+  if (d.id_materi) { const m = DB.find('Materi', x => x.id_materi === d.id_materi); return m ? m.id_pelatihan : ''; }
+  return '';
+}
+function cekTerbuka(idPel) {
+  if (!idPel) return;
+  const r = DB.find('Pelatihan', x => x.id_pelatihan === idPel);
+  const p = r ? parsePel(r) : null;
+  if (p && p.terkunci) throw new Error('Pelatihan "' + p.judul + '" sudah ' + (p.penutupan === 'ditutup' ? 'ditutup' : 'berakhir') + ' — data terkunci dan tidak bisa diubah. Laporan tetap bisa diekspor' + (p.penutupan === 'ditutup' ? '.' : '. Admin dapat membukanya kembali bila perlu koreksi.'));
+}
+/** Bungkus aksi tulis: tolak bila pelatihannya terkunci. */
+function jagaKunci(fn) { return (d, s) => { cekTerbuka(idPelDari(d)); return fn(d, s); }; }
 function syaratDefault() {
   return Object.assign({ hadir: true, post: true, naik: true, tugas: true }, pj(setting('SYARAT_LULUS_DEFAULT', ''), {}));
 }
@@ -751,7 +796,8 @@ function ringkasPel(p) {
     id_instruktur: p.id_instruktur, instruktur: namaInstruktur(p.id_instruktur),
     jumlah_hari: p.jumlah_hari, tanggal_mulai: p.tanggal_mulai, tanggal_selesai: p.tanggal_selesai,
     tanggal_hari: p.tanggal_hari, jam: p.jam, format: p.format, lokasi_atau_link: p.lokasi_atau_link, link_dokumentasi: p.link_dokumentasi || '',
-    kuota: p.kuota, status: p.status, aktivitas: p.aktivitas, syarat: p.syarat,
+    kuota: p.kuota, status: p.status, status_tanggal: p.status_tanggal, penutupan: p.penutupan || '', terkunci: !!p.terkunci, tgl_ditutup: p.tgl_ditutup || '',
+    aktivitas: p.aktivitas, syarat: p.syarat,
     flyer: urlGambar(p.id_flyer), id_template_sertifikat: p.id_template_sertifikat
   };
 }
@@ -1604,8 +1650,7 @@ function aksiPelatihanSimpan(d, s) {
       if (l && !/^https?:\/\/\S+$/i.test(l)) throw new Error('Link dokumentasi harus diawali https:// (salin dari OneDrive/Google Drive).');
       return l;
     })(),
-    kuota: parseInt(d.kuota, 10),
-    status: ['akan datang', 'berlangsung', 'selesai'].indexOf(d.status) >= 0 ? d.status : 'akan datang'
+    kuota: parseInt(d.kuota, 10)
   };
   const n = parseInt(d.jumlah_hari, 10);
   if (n !== 1 && n !== 2) throw new Error('Jumlah hari wajib diisi (1 hari atau 2 hari).');
@@ -1613,6 +1658,7 @@ function aksiPelatihanSimpan(d, s) {
   o.tanggal_mulai = wajib(d.tanggal_mulai, 'Tanggal Hari 1 wajib diisi.');
   o.tanggal_selesai = n === 2 ? wajib(d.tanggal_selesai, 'Tanggal Hari 2 wajib diisi.') : o.tanggal_mulai;
   if (n === 2 && o.tanggal_selesai <= o.tanggal_mulai) throw new Error('Tanggal Hari 2 harus setelah Hari 1.');
+  o.status = statusMenurutTanggal(o.tanggal_mulai, o.tanggal_selesai); // status otomatis mengikuti tanggal
   if (o.cakupan === 'sektor' && SEKTOR.indexOf(o.sektor) < 0) throw new Error('Pilih sektor pelatihan.');
   if (!o.kuota || o.kuota < 1) throw new Error('Kuota harus angka lebih dari 0.');
 
@@ -1674,6 +1720,29 @@ function aksiPelatihanHapus(d, s) {
     DB.remove('Pelatihan', [DB.find('Pelatihan', x => x.id_pelatihan === id)]);
     catatLog(s, 'Menghapus pelatihan "' + r.judul + '"');
     return { message: 'Pelatihan dihapus.' };
+  });
+}
+
+/**
+ * Tutup pelatihan (d.tutup = true): semua aktivitas ditutup & data terkunci (hanya lihat & ekspor).
+ * Buka kembali (d.tutup = false): untuk koreksi data, termasuk pelatihan yang sudah lewat hari terakhirnya.
+ */
+function aksiPelatihanTutup(d, s) {
+  return denganKunci(() => {
+    const r = DB.find('Pelatihan', x => x.id_pelatihan === d.id_pelatihan);
+    if (!r) throw new Error('Pelatihan tidak ditemukan.');
+    const p = parsePel(r);
+    if (d.tutup) {
+      const akt = {};
+      Object.keys(p.aktivitas || {}).forEach(k => akt[k] = /^dibuka_/.test(k) ? p.aktivitas[k] : false);
+      ['absen_1', 'absen_2', 'pre', 'post', 'tugas', 'evaluasi'].forEach(k => akt[k] = false);
+      DB.update('Pelatihan', r, { penutupan: 'ditutup', tgl_ditutup: now(), status: 'selesai', status_aktivitas: akt });
+      catatLog(s, 'Menutup pelatihan ' + p.judul);
+      return { message: 'Pelatihan ditutup. Data terkunci — laporan tetap bisa diekspor.' };
+    }
+    DB.update('Pelatihan', r, { penutupan: p.status_tanggal === 'selesai' ? 'dibuka' : '', tgl_ditutup: '', status: p.status_tanggal });
+    catatLog(s, 'Membuka kembali pelatihan ' + p.judul);
+    return { message: 'Pelatihan dibuka kembali. Data bisa dikoreksi; tutup lagi bila sudah selesai.' };
   });
 }
 
@@ -2418,14 +2487,19 @@ function aksiDasborAdmin(d, s) {
   const jmlPeserta = {};
   reg.forEach(r => (jmlPeserta[r.id_pelatihan] = jmlPeserta[r.id_pelatihan] || []).push(r.id_umkm));
 
-  // Kehadiran kumulatif: hari yang sudah lewat/berjalan saja
-  let hadirTotal = 0, hariTotal = 0, lulus = 0;
+  // Kehadiran per PESERTA (bukan per hari): peserta terdaftar di pelatihan yang sudah dimulai,
+  // dihitung hadir bila tercatat absen (minimal 1 hari), selain itu tidak hadir
+  let hadirTotal = 0, pesertaTotal = 0, hadirPenuhTotal = 0, lulus = 0;
   const rekap = pels.map(p => {
     const ids = jmlPeserta[p.id_pelatihan] || [];
     const idx = I.get(p.id_pelatihan);
     const hadirPenuh = ids.filter(id => Object.keys(idx.absen[id] || {}).length >= p.jumlah_hari).length;
     const hariJalan = p.tanggal_hari.filter(t => t <= hi).length;
-    ids.forEach(id => { hadirTotal += Math.min(hariJalan, Object.keys(idx.absen[id] || {}).length); hariTotal += hariJalan; if (statusPeserta(p, id, idx).lulus) lulus++; });
+    ids.forEach(id => {
+      const nAbsen = Object.keys(idx.absen[id] || {}).length;
+      if (hariJalan) { pesertaTotal++; if (nAbsen) hadirTotal++; if (nAbsen >= hariJalan) hadirPenuhTotal++; }
+      if (statusPeserta(p, id, idx).lulus) lulus++;
+    });
     return Object.assign(ringkasPel(p), { jumlah_peserta: ids.length, hadir_penuh: hadirPenuh });
   }).sort((a, b) => String(b.tanggal_mulai).localeCompare(String(a.tanggal_mulai)));
 
@@ -2474,7 +2548,8 @@ function aksiDasborAdmin(d, s) {
       peserta_baru: ytd ? reg.filter(r => String(r.tgl_daftar).slice(0, 7) === bulanIni).length : 0, per_sektor: perSektor,
       umkm: Object.keys(umkm).length, pelatihan: pels.length,
       materi: materi.length, materi_umum: materi.filter(m => m.cakupan === 'umum').length,
-      kehadiran: hariTotal ? bulat(hadirTotal / hariTotal * 100) : null, hadir_total: hadirTotal, hari_total: hariTotal,
+      kehadiran: pesertaTotal ? bulat(hadirTotal / pesertaTotal * 100) : null, hadir_total: hadirTotal, peserta_total: pesertaTotal,
+      tidak_hadir_total: pesertaTotal - hadirTotal, hadir_penuh_total: hadirPenuhTotal,
       kehadiran_live: live && live.jumlah_peserta ? bulat(live.absen.hadir / live.jumlah_peserta * 100) : null,
       tugas_menunggu: tugasMenunggu, tugas_masuk: tugasMasuk
     },
@@ -2855,7 +2930,8 @@ var CERMIN = {
         tanggal_hari: jh === 2 ? [r.tanggal_mulai, r.tanggal_selesai] : [r.tanggal_mulai], tahun: String(r.tanggal_mulai).slice(0, 4),
         jam: r.jam, format: r.format, lokasi_atau_link: r.lokasi_atau_link, kuota: parseInt(r.kuota, 10) || 0, status: r.status,
         id_flyer: r.id_flyer, flyer_url: CERMIN.gambar(r.id_flyer), aktivitas: j(r.status_aktivitas, {}), syarat: j(r.syarat_lulus, {}),
-        id_template_sertifikat: r.id_template_sertifikat, tgl_dibuat: r.tgl_dibuat, link_dokumentasi: r.link_dokumentasi || ''
+        id_template_sertifikat: r.id_template_sertifikat, tgl_dibuat: r.tgl_dibuat, link_dokumentasi: r.link_dokumentasi || '',
+        penutupan: r.penutupan || '', tgl_ditutup: r.tgl_ditutup || ''
       };
     };
     // Kartu QR absensi publik (dibaca halaman scan tanpa login) — hanya ada bila QR pelatihan sudah dibuat

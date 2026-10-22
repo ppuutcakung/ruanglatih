@@ -48,12 +48,29 @@ const Kelola = {
       list.map(p => '<option value="' + esc(p.id_pelatihan) + '"' + (p.id_pelatihan === id ? ' selected' : '') + '>' + esc(p.judul) + ' · ' + esc(UI.rentang(p)) + '</option>').join('') + '</select>';
     const sel = $('select', host);
     const cari = v => list.find(p => p.id_pelatihan === v) || null;
-    sel.onchange = () => { if (sel.value) sessionStorage.setItem('rl_pel', sel.value); onPilih(sel.value, cari(sel.value)); };
+    // Spanduk "terkunci" di bawah judul halaman bila pelatihan terpilih sudah ditutup / berakhir
+    const spanduk = v => {
+      const ph = host.closest('.page-h');
+      if (!ph) return;
+      let bn = ph.nextElementSibling && ph.nextElementSibling.hasAttribute('data-kunci') ? ph.nextElementSibling : null;
+      const p = cari(v);
+      if (p && p.terkunci) { if (!bn) { bn = document.createElement('div'); bn.setAttribute('data-kunci', ''); ph.after(bn); } bn.innerHTML = this.spandukKunci(p); }
+      else if (bn) bn.remove();
+    };
+    sel.onchange = () => { if (sel.value) sessionStorage.setItem('rl_pel', sel.value); spanduk(sel.value); onPilih(sel.value, cari(sel.value)); };
     if (!list.length && !opt.semua) { onPilih('', null); return list; }
+    spanduk(id);
     onPilih(id, cari(id));
     return list;
   },
 
+  /** Pemberitahuan: pelatihan terkunci (ditutup / sudah berakhir) → hanya lihat & ekspor. */
+  spandukKunci(p) {
+    const admin = this.peran() === 'admin';
+    return '<div class="card well row" style="margin:12px 0 4px;border-color:var(--blush-3)">' + UI.ic('lock') + '<div class="t-sm"><b>Pelatihan ' + (p.penutupan === 'ditutup' ? 'sudah ditutup' : 'sudah berakhir') + ' — data terkunci.</b> ' +
+      'Absen, materi, soal, tugas, nilai, dan evaluasi tidak bisa ditambah, diubah, atau dihapus. Laporan PDF & Excel tetap bisa diekspor.' +
+      (admin ? ' Perlu koreksi? Buka menu <b>Pelatihan</b> → pelatihan ini → <b>Buka Kembali</b>.' : ' Perlu koreksi? Hubungi admin PPU.') + '</div></div>';
+  },
   tanpaPelatihan() {
     return '<div class="card">' + UI.kosong(this.peran() === 'admin' ? 'Belum ada pelatihan. Buat pelatihan terlebih dahulu di menu Pelatihan.' : 'Belum ada pelatihan yang ditugaskan kepada Anda.', 'cap') + '</div>';
   },

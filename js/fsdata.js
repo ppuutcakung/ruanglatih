@@ -8,7 +8,7 @@
    • Aksi yang butuh rahasia/Google Drive tetap dikirim ke GAS (mode Firebase).
    ============================================================= */
 var FSD = {
-  VERSI: '4.2', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
+  VERSI: '4.3', // naikkan setiap mesin.js dibangun ulang (agar browser tidak memakai versi lama)
   data: {}, _src: {}, _off: [], _siap: null, _pel: {}, _uid: '', _versi: 0, _t: null,
 
   // ---------- Aksi yang dijalankan di perangkat ----------
@@ -18,7 +18,7 @@ var FSD = {
   // tugas_nilai sengaja lewat server (GAS): nilai adalah data penting → tidak bergantung aturan di browser
   // pelatihan_hapus & tugas_hapus lewat server: berkas Google Drive (flyer, lampiran) ikut dihapus
   // umkm_status lewat server: akun login Firebase ikut dinonaktifkan/diaktifkan seketika
-  TULIS: ['pelatihan_simpan', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',
+  TULIS: ['pelatihan_simpan', 'pelatihan_tutup', 'draft_simpan', 'draft_hapus', 'aktivitas_set', 'syarat_set', 'peserta_daftarkan', 'peserta_ubah',
     'peserta_hapus', 'soal_simpan', 'soal_simpan_banyak', 'soal_hapus', 'tugas_simpan',
     'eval_simpan_form', 'eval_salin', 'p_absen', 'p_kirim_eval'],
   /** true bila aksi ini dijalankan di perangkat (bukan di GAS). */

@@ -110,7 +110,7 @@ const Peserta = {
       const t = rows.filter(f);
       isi.innerHTML = '<div class="seg pill" data-f>' + [['aktif', 'Berjalan & Akan Datang'], ['selesai', 'Selesai'], ['semua', 'Semua']].map(x => '<button data-v="' + x[0] + '" class="' + (filter === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>' +
         (t.length ? '<div class="col">' + t.map(p =>
-          '<a class="card" href="#/ruang/' + esc(p.id_pelatihan) + '/absensi" style="color:inherit;display:block"><div class="row between top"><div class="h-sm">' + esc(p.judul) + '</div>' + UI.chipStatus(p.status) + '</div>' +
+          '<a class="card" href="#/ruang/' + esc(p.id_pelatihan) + '/absensi" style="color:inherit;display:block"><div class="row between top"><div class="h-sm">' + esc(p.judul) + '</div>' + UI.chipStatus(p.status, p.terkunci) + '</div>' +
           '<div class="col g4 t-sm muted mt12"><span class="row g8">' + UI.ic('calendar', 'sm') + esc(UI.rentang(p)) + ' · ' + p.jumlah_hari + ' hari</span><span class="row g8">' + UI.ic('clock', 'sm') + esc(p.jam) + '</span>' +
           '<span class="row g8">' + UI.ic(p.format === 'online' ? 'link' : 'pin', 'sm') + '<span class="clamp1">' + esc(p.format === 'online' ? 'Online' : p.lokasi_atau_link) + '</span></span><span class="row g8">' + UI.ic('user', 'sm') + esc(p.instruktur) + '</span></div>' +
           '<div class="row between mt12" style="border-top:1px solid var(--blush-2);padding-top:12px"><span class="t-sm">Hadir <b>' + p.hadir + '/' + p.jumlah_hari + '</b> hari</span>' +
@@ -195,7 +195,7 @@ const Peserta = {
       return '<div class="card slot-card ' + kls + '"><div class="slot"><div class="ic-tile ' + (s.hadir ? 'ok' : (s.buka ? 'solid' : '')) + '">' + UI.ic(s.hadir ? 'calendar' : 'clock') + '</div>' +
         '<div class="grow"><div class="row g8"><span class="h-sm">Hari ke-' + s.hari_ke + '</span>' + (s.hari_ini ? '<span class="chip solid sm">AKTIF</span>' : '') + '</div><div class="t-sm muted">' + (s.hari_ini ? 'Hari ini · ' : '') + esc(UI.tglHari(s.tanggal)) + (s.hadir ? ' · ' + UI.jam(s.waktu) : '') + '</div></div>' + kanan + '</div>' + aksi + '</div>';
     }).join('');
-    return '<div class="card"><div class="card-h"><div class="ttl">' + UI.ic('info', 'sm') + '<span class="semi">Informasi Pelatihan</span></div>' + UI.chipStatus(p.status) + '</div>' +
+    return '<div class="card"><div class="card-h"><div class="ttl">' + UI.ic('info', 'sm') + '<span class="semi">Informasi Pelatihan</span></div>' + UI.chipStatus(p.status, p.terkunci) + '</div>' +
       '<div class="info-tiles"><div class="info-tile">' + UI.ic('calendar', 'sm') + '<div><div class="t-xs muted">Jadwal & Durasi</div><div class="semi t-sm">' + esc(UI.rentang(p)) + '</div><div class="t-xs muted">' + p.jumlah_hari + ' Hari (' + esc(p.jam) + ')</div></div></div>' +
       '<div class="info-tile">' + UI.ic('user', 'sm') + '<div><div class="t-xs muted">Instruktur</div><div class="semi t-sm">' + esc(p.instruktur) + '</div><div class="t-xs muted clamp1">' + esc(p.tema || 'Instruktur pelatihan') + '</div></div></div></div>' +
       '<div class="col g4 t-sm mt12"><span class="row g8">' + UI.ic(p.format === 'online' ? 'link' : 'pin', 'sm') + '<span><b>' + (p.format === 'online' ? 'Link' : 'Lokasi') + ':</b> ' +
@@ -462,7 +462,7 @@ const Peserta = {
     UI.loading(isi, 2);
     const angka = (l, x, kls) => '<div class="info-tile" style="flex-direction:column;gap:2px"><span class="t-xs muted">' + l + '</span><b class="h-sm ' + (kls || '') + '">' + x + '</b></div>';
     const gambar = rows => {
-      isi.innerHTML = rows.length ? rows.map(r => '<div class="card"><div class="row between top"><div><div class="h-sm">' + esc(r.judul) + '</div><div class="t-sm muted">' + esc(r.tanggal) + ' · ' + esc(r.instruktur) + '</div></div>' + UI.chipStatus(r.status) + '</div>' +
+      isi.innerHTML = rows.length ? rows.map(r => '<div class="card"><div class="row between top"><div><div class="h-sm">' + esc(r.judul) + '</div><div class="t-sm muted">' + esc(r.tanggal) + ' · ' + esc(r.instruktur) + '</div></div>' + UI.chipStatus(r.status, r.terkunci) + '</div>' +
         '<div class="grid mt12" style="grid-template-columns:repeat(3,1fr);gap:8px">' + angka('Hadir', r.hadir + '/' + r.jumlah_hari) + angka('Pre-test', UI.angka(r.pre)) + angka('Post-test', UI.angka(r.post), 'c-primary') +
         angka('Kenaikan', r.kenaikan === null ? '–' : (r.kenaikan > 0 ? '+' : '') + UI.angka(r.kenaikan), r.kenaikan > 0 ? 'c-ok' : '') + angka('Tugas', r.tugas_kumpul + '/' + r.tugas_total) + angka('Skor tugas', UI.angka(r.skor_tugas)) + '</div>' +
         '<div class="row between mt12"><span class="t-sm muted clamp1">' + (r.kurang.length ? esc(r.kurang[0]) + (r.kurang.length > 1 ? ' +' + (r.kurang.length - 1) : '') : 'Semua syarat terpenuhi') + '</span>' + UI.chipLulus(r.lulus) + '</div></div>').join('')

@@ -113,10 +113,11 @@ const UI = {
   sapaan(n) { return String(n || '').split(/\s+/)[0] || ''; },
 
   // ---------- Chip ----------
-  chipStatus(st) {
-    if (st === 'berlangsung') return '<span class="chip ok dot">Berlangsung</span>';
-    if (st === 'akan datang') return '<span class="chip warn dot">Akan Datang</span>';
-    return '<span class="chip info dot">Selesai</span>';
+  chipStatus(st, kunci) {
+    const k = kunci ? '<span class="chip line">' + UI.ic('lock', 'sm') + 'Terkunci</span>' : '';
+    if (st === 'berlangsung') return '<span class="chip ok dot">Berlangsung</span>' + k;
+    if (st === 'akan datang') return '<span class="chip warn dot">Akan Datang</span>' + k;
+    return '<span class="chip info dot">Selesai</span>' + k;
   },
   chipLabel(lbl) {
     const c = lbl === 'Berlangsung' ? 'ok' : (lbl === 'Akan Datang' ? 'warn' : 'info');
